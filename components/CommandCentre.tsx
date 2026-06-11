@@ -1,389 +1,299 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   LayoutGrid, Layers, Heart, Home, Users, Sun, Cloud, CloudRain, CloudSnow,
   CloudLightning, CloudFog, Wind, Clock, Feather, Newspaper, Calendar,
-  CheckSquare, Target, Plus, X, ArrowUpRight, Trash2, Check,
-  ChevronDown, ChevronLeft, ChevronRight, Moon, Mountain, Waves, Leaf,
-  Flame, Activity, Edit3, Maximize2, Minimize2, CircleCheck,
+  Target, Plus, X, ArrowUpRight, Check, ChevronLeft, ChevronRight,
+  Moon, Flame, Activity, BookOpen, Link2, FlaskConical, Landmark, TrendingUp,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Project   = { id: number; title: string; cat: string; status: string; phases: string[]; cp: number; next: string; last: string; dl: string; who: string; block: string; log: { d: string; n: string }[] }
+type Project    = { id: number; title: string; cat: string; status: string; phases: string[]; cp: number; next: string; last: string; dl: string; who: string; block: string; notes: string; log: { d: string; n: string }[] }
 type Reflection = { id: number; content: string; created_at: string }
 type Task       = { id: number; title: string; done: boolean; due_date: string }
 type FamilyNote = { id: number; member: string; content: string; created_at: string }
 type FriendNote = { id: number; name: string; content: string; created_at: string }
+type Resource   = { id: number; title: string; url: string; category: string; note: string; created_at: string }
 type NewsItem   = { title: string; link: string; pubDate: string; description: string }
-type Page       = 'dashboard' | 'projects' | 'health' | 'family' | 'friends'
-type Landscape  = 'sunset' | 'mountain' | 'ocean' | 'forest'
-type TimeOfDay  = 'morning' | 'afternoon' | 'evening' | 'night'
+type NewsData   = { research: NewsItem[]; politics: NewsItem[]; finance: NewsItem[] }
+type Page       = 'dashboard' | 'projects' | 'health' | 'family' | 'friends' | 'resources'
 
-// ─── Typography scale ─────────────────────────────────────────────────────────
+// ─── Typography ───────────────────────────────────────────────────────────────
+
+const DISPLAY = 'var(--font-display), Georgia, serif'
+const GROTESK = 'var(--font-grotesk), var(--font-sans), sans-serif'
 
 const T = {
-  display: { fontSize: 56, fontWeight: 200, letterSpacing: '-0.03em', lineHeight: 1.0 } as React.CSSProperties,
-  h1:      { fontSize: 34, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.2 } as React.CSSProperties,
-  h2:      { fontSize: 22, fontWeight: 300, letterSpacing: '-0.01em', lineHeight: 1.3 } as React.CSSProperties,
-  h3:      { fontSize: 16, fontWeight: 500, letterSpacing: '-0.005em', lineHeight: 1.4 } as React.CSSProperties,
-  body:    { fontSize: 14, fontWeight: 400, letterSpacing: '0em', lineHeight: 1.65 } as React.CSSProperties,
+  display: { fontFamily: DISPLAY, fontSize: 58, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.0 } as React.CSSProperties,
+  h1:      { fontFamily: DISPLAY, fontSize: 36, fontWeight: 400, letterSpacing: '-0.015em', lineHeight: 1.15 } as React.CSSProperties,
+  h2:      { fontFamily: DISPLAY, fontSize: 23, fontWeight: 400, letterSpacing: '-0.01em', lineHeight: 1.3 } as React.CSSProperties,
+  h3:      { fontSize: 15.5, fontWeight: 550, letterSpacing: '-0.005em', lineHeight: 1.4 } as React.CSSProperties,
+  body:    { fontSize: 14, fontWeight: 400, lineHeight: 1.65 } as React.CSSProperties,
   sm:      { fontSize: 12, fontWeight: 400, letterSpacing: '0.005em', lineHeight: 1.5 } as React.CSSProperties,
-  label:   { fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' as const, lineHeight: 1.4 } as React.CSSProperties,
+  label:   { fontFamily: GROTESK, fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase' as const, lineHeight: 1.4 } as React.CSSProperties,
+  num:     { fontFamily: GROTESK, fontVariantNumeric: 'tabular-nums' } as React.CSSProperties,
 }
-
-// ─── Colour tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  text:       'rgba(255,255,255,0.93)',
-  textSub:    'rgba(255,255,255,0.65)',
-  textMuted:  'rgba(255,255,255,0.38)',
-  champagne:  'rgba(224,204,158,0.90)',
-  sage:       'rgba(160,210,170,0.85)',
-  border:     'rgba(255,255,255,0.12)',
-  borderHov:  'rgba(255,255,255,0.24)',
+  text:      'rgba(245,246,255,0.94)',
+  textSub:   'rgba(220,224,245,0.66)',
+  textMuted: 'rgba(200,206,235,0.38)',
+  gold:      'rgba(255,216,160,0.92)',
+  aurora:    'rgba(150,168,255,0.92)',
+  border:    'rgba(160,175,255,0.13)',
+  borderHov: 'rgba(180,195,255,0.30)',
 }
 
-// ─── Time of day ──────────────────────────────────────────────────────────────
-
-function getTOD(): TimeOfDay {
-  const h = new Date().getHours()
-  if (h >= 5  && h < 12) return 'morning'
-  if (h >= 12 && h < 17) return 'afternoon'
-  if (h >= 17 && h < 21) return 'evening'
-  return 'night'
-}
-
-const TOD_DATA: Record<TimeOfDay, { label: string; icon: React.ReactNode; greeting: string }> = {
-  morning:   { label: 'Morning',   icon: <Sun size={13} strokeWidth={1.5}/>,  greeting: 'Good morning' },
-  afternoon: { label: 'Afternoon', icon: <Sun size={13} strokeWidth={1.5}/>,  greeting: 'Good afternoon' },
-  evening:   { label: 'Evening',   icon: <Sun size={13} strokeWidth={1.5}/>,  greeting: 'Good evening' },
-  night:     { label: 'Night',     icon: <Moon size={13} strokeWidth={1.5}/>, greeting: 'Good night' },
-}
-
-// ─── Scene contrast config ────────────────────────────────────────────────────
-// overlayOpacity: black overlay to dampen background brightness
-// tint: subtle color grading overlay
-// Calculated to ensure WCAG AA (4.5:1) for primary text on glass panels
-
-type SceneConfig = { overlay: number; tint: string }
-
-const SCENE: Record<Landscape, Record<TimeOfDay, SceneConfig>> = {
-  sunset:   {
-    morning:   { overlay: 0.50, tint: 'rgba(30,0,60,0.10)' },
-    afternoon: { overlay: 0.46, tint: 'rgba(20,0,50,0.08)' },
-    evening:   { overlay: 0.38, tint: 'rgba(50,0,20,0.12)' },
-    night:     { overlay: 0.28, tint: 'rgba(10,0,40,0.15)' },
-  },
-  mountain: {
-    morning:   { overlay: 0.65, tint: 'rgba(255,200,100,0.06)' },
-    afternoon: { overlay: 0.63, tint: 'rgba(200,220,255,0.05)' },
-    evening:   { overlay: 0.52, tint: 'rgba(180,80,30,0.10)'  },
-    night:     { overlay: 0.32, tint: 'rgba(20,30,80,0.12)'   },
-  },
-  ocean:    {
-    morning:   { overlay: 0.62, tint: 'rgba(255,210,150,0.08)' },
-    afternoon: { overlay: 0.65, tint: 'rgba(200,230,255,0.05)' },
-    evening:   { overlay: 0.50, tint: 'rgba(180,80,40,0.10)'  },
-    night:     { overlay: 0.30, tint: 'rgba(10,20,60,0.15)'   },
-  },
-  forest:   {
-    morning:   { overlay: 0.52, tint: 'rgba(255,200,100,0.07)' },
-    afternoon: { overlay: 0.50, tint: 'rgba(180,255,180,0.04)' },
-    evening:   { overlay: 0.42, tint: 'rgba(140,70,20,0.10)'  },
-    night:     { overlay: 0.26, tint: 'rgba(0,10,5,0.15)'     },
-  },
-}
-
-// ─── Landscape gradient data ──────────────────────────────────────────────────
-
-const LS_GRAD: Record<Landscape, Record<TimeOfDay, [string,string,string,string]>> = {
-  sunset: {
-    morning:   ['#3a1058','#8a3070','#d46848','#f4a838'],
-    afternoon: ['#2c0848','#7a1c58','#c84e3c','#f09028'],
-    evening:   ['#16002a','#500a46','#b02e2c','#e86018'],
-    night:     ['#070010','#10001e','#220834','#160518'],
-  },
-  mountain: {
-    morning:   ['#d0e0ec','#a8c0d8','#88a8c0','#6888a4'],
-    afternoon: ['#b8d0e8','#90b8d8','#6898be','#5080a6'],
-    evening:   ['#785068','#a87088','#c89090','#d8a080'],
-    night:     ['#0a0e1e','#161c34','#1e263c','#161c2c'],
-  },
-  ocean: {
-    morning:   ['#feeed4','#c4dcea','#76acd4','#287094'],
-    afternoon: ['#eef6ff','#b4d6ec','#64a4cc','#185e8c'],
-    evening:   ['#ec7c58','#be647c','#4c7c9c','#184664'],
-    night:     ['#060c16','#0e1626','#162c3c','#0e2434'],
-  },
-  forest: {
-    morning:   ['#183626','#234832','#2e563c','#264e46'],
-    afternoon: ['#1c4030','#284e36','#346244','#2c5e54'],
-    evening:   ['#28261c','#382e16','#463e1c','#3c3616'],
-    night:     ['#050a06','#0a160c','#0e1c10','#0c180e'],
-  },
-}
-
-// ─── CSS keyframes ────────────────────────────────────────────────────────────
+// ─── Keyframes ────────────────────────────────────────────────────────────────
 
 const KEYFRAMES = `
-  @keyframes wv1 {
-    0%,100% { d:path("M-100,460 Q200,422 400,455 Q600,488 800,445 Q1000,402 1200,445 Q1400,488 1640,455"); }
-    50%      { d:path("M-100,448 Q200,488 400,448 Q600,408 800,458 Q1000,508 1200,458 Q1400,408 1640,448"); }
-  }
-  @keyframes wv2 {
-    0%,100% { d:path("M-100,522 Q220,488 440,520 Q660,552 880,512 Q1100,472 1320,512 Q1440,532 1640,512"); }
-    50%      { d:path("M-100,510 Q220,552 440,510 Q660,468 880,520 Q1100,568 1320,520 Q1440,490 1640,520"); }
-  }
-  @keyframes wv3 {
-    0%,100% { d:path("M-100,592 Q240,555 460,590 Q680,625 900,580 Q1120,535 1340,578 Q1460,598 1640,572"); }
-    50%      { d:path("M-100,578 Q240,618 460,578 Q680,538 900,592 Q1120,640 1340,592 Q1460,565 1640,592"); }
-  }
-  @keyframes mistMove { from{transform:translateX(0)} to{transform:translateX(-90px)} }
-  @keyframes fogMove  { from{transform:translateX(0) scaleX(1)} to{transform:translateX(-70px) scaleX(1.06)} }
-  @keyframes rayPulse { from{opacity:0.55} to{opacity:1} }
-  @keyframes float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-  @keyframes breathe  { 0%,100%{transform:scale(1);opacity:0.5} 50%{transform:scale(1.12);opacity:0.2} }
-  @keyframes fadeUp   { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes taskPop  { 0%{transform:scale(1)} 40%{transform:scale(1.35)} 100%{transform:scale(1)} }
-  @keyframes focusIn  { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
-  @keyframes grain    { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-2%,-1%)} 50%{transform:translate(1%,2%)} 75%{transform:translate(2%,-1%)} }
+  @keyframes drift     { 0%,100%{transform:translate(0,0) rotate(0deg)} 50%{transform:translate(18px,-26px) rotate(3deg)} }
+  @keyframes drift2    { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-24px,18px)} }
+  @keyframes orbitMoon { from{transform:rotate(0deg) translateX(86px) rotate(0deg)} to{transform:rotate(360deg) translateX(86px) rotate(-360deg)} }
+  @keyframes spinSlow  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes pulseGlow { 0%,100%{opacity:0.55} 50%{opacity:1} }
+  @keyframes float     { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes breathe   { 0%,100%{transform:scale(1);opacity:0.5} 50%{transform:scale(1.12);opacity:0.18} }
+  @keyframes fadeUp    { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes taskPop   { 0%{transform:scale(1)} 40%{transform:scale(1.35)} 100%{transform:scale(1)} }
+  @keyframes focusIn   { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
+  @keyframes shimmer   { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+  @keyframes nebulaSh  { 0%,100%{opacity:0.55;transform:scale(1)} 50%{opacity:0.85;transform:scale(1.08)} }
 `
 
-// ─── Landscape SVG layers ─────────────────────────────────────────────────────
+// ─── Space canvas: parallax starfield + spiral galaxy + shooting stars ───────
 
-function SunsetLayer({ tod }: { tod: TimeOfDay }) {
-  const op = tod === 'night' ? 0.05 : 0.65
-  const sy = tod === 'evening' ? 540 : tod === 'night' ? 700 : 460
+function SpaceCanvas() {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const ctx = cv.getContext('2d')
+    if (!ctx) return
+    let w = 0, h = 0, raf = 0
+    const mouse = { x: 0.5, y: 0.5 }
+    const resize = () => { w = cv.width = window.innerWidth; h = cv.height = window.innerHeight }
+    resize()
+    const onResize = () => resize()
+    const onMove = (e: MouseEvent) => { mouse.x = e.clientX / w; mouse.y = e.clientY / h }
+    window.addEventListener('resize', onResize)
+    window.addEventListener('mousemove', onMove)
+
+    const stars = Array.from({ length: 300 }, () => ({
+      x: Math.random(), y: Math.random(),
+      z: Math.random() * 0.85 + 0.15,
+      r: Math.random() * 1.3 + 0.3,
+      tw: Math.random() * Math.PI * 2,
+      ts: 0.4 + Math.random() * 1.8,
+      hue: Math.random(),
+    }))
+
+    // spiral galaxy particles, 3 arms
+    const gal = Array.from({ length: 520 }, (_, i) => {
+      const arm = i % 3
+      const t = Math.pow(Math.random(), 0.7) * 5 + 0.3
+      return {
+        t,
+        a: t * 1.85 + arm * (Math.PI * 2 / 3),
+        rad: t * 27,
+        sx: (Math.random() - 0.5) * (10 + t * 5),
+        sy: (Math.random() - 0.5) * (6 + t * 3),
+        br: 0.3 + Math.random() * 0.7,
+      }
+    })
+    let galRot = 0
+
+    type Shoot = { x: number; y: number; vx: number; vy: number; life: number }
+    const shooting: Shoot[] = []
+
+    let last = performance.now()
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05)
+      last = now
+      ctx.clearRect(0, 0, w, h)
+      const mx = mouse.x - 0.5, my = mouse.y - 0.5
+
+      // stars (3 parallax depths via z)
+      for (const s of stars) {
+        s.tw += s.ts * dt
+        const op = (0.30 + 0.55 * Math.abs(Math.sin(s.tw))) * s.z
+        const px = ((s.x * w - mx * 46 * s.z) % w + w) % w
+        const py = ((s.y * h - my * 46 * s.z) % h + h) % h
+        ctx.globalAlpha = op
+        ctx.fillStyle = s.hue < 0.12 ? '#ffd9a8' : s.hue < 0.24 ? '#aebbff' : '#ffffff'
+        ctx.beginPath(); ctx.arc(px, py, s.r * s.z, 0, 7); ctx.fill()
+      }
+
+      // spiral galaxy, upper right, counter-parallax
+      galRot += dt * 0.045
+      const gx = w * 0.80 - mx * -34, gy = h * 0.22 - my * -34
+      for (const p of gal) {
+        const a = p.a + galRot
+        const px = gx + Math.cos(a) * p.rad + p.sx
+        const py = gy + Math.sin(a) * p.rad * 0.42 + p.sy
+        ctx.globalAlpha = Math.max(0.06, (0.55 - p.t * 0.085)) * p.br
+        ctx.fillStyle = p.t < 1.3 ? '#ffeccb' : p.t < 3 ? '#cdd6ff' : '#8fa0f0'
+        ctx.beginPath(); ctx.arc(px, py, p.t < 1 ? 1.5 : 0.9, 0, 7); ctx.fill()
+      }
+      const core = ctx.createRadialGradient(gx, gy, 0, gx, gy, 46)
+      core.addColorStop(0, 'rgba(255,238,205,0.55)')
+      core.addColorStop(0.45, 'rgba(220,200,255,0.14)')
+      core.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.globalAlpha = 1
+      ctx.fillStyle = core
+      ctx.fillRect(gx - 46, gy - 46, 92, 92)
+
+      // shooting stars
+      if (Math.random() < dt * 0.14) {
+        shooting.push({ x: Math.random() * w * 0.9 + w * 0.1, y: Math.random() * h * 0.35, vx: -(380 + Math.random() * 320), vy: 150 + Math.random() * 120, life: 1 })
+      }
+      for (let i = shooting.length - 1; i >= 0; i--) {
+        const s = shooting[i]
+        s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt * 1.1
+        if (s.life <= 0) { shooting.splice(i, 1); continue }
+        const tail = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * 0.16, s.y - s.vy * 0.16)
+        tail.addColorStop(0, `rgba(255,255,255,${0.85 * s.life})`)
+        tail.addColorStop(1, 'rgba(255,255,255,0)')
+        ctx.globalAlpha = 1
+        ctx.strokeStyle = tail
+        ctx.lineWidth = 1.6
+        ctx.beginPath()
+        ctx.moveTo(s.x, s.y)
+        ctx.lineTo(s.x - s.vx * 0.16, s.y - s.vy * 0.16)
+        ctx.stroke()
+      }
+
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('mousemove', onMove)
+    }
+  }, [])
+  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+}
+
+// ─── Planets (SVG, drifting) ──────────────────────────────────────────────────
+
+function Planets() {
   return (
-    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
-      <defs>
-        <radialGradient id="sg" cx="50%" cy="50%" r="50%">
-          <stop offset="0%"   stopColor="#ffe88a" stopOpacity={op}/>
-          <stop offset="45%"  stopColor="#ff9040" stopOpacity={op * 0.45}/>
-          <stop offset="100%" stopColor="transparent" stopOpacity="0"/>
-        </radialGradient>
-        <filter id="sb"><feGaussianBlur stdDeviation="22"/></filter>
-      </defs>
-      <ellipse cx="720" cy={sy} rx="160" ry="120" fill="url(#sg)" filter="url(#sb)" style={{ animation:'float 20s ease-in-out infinite' }}/>
-      <ellipse cx="720" cy="640" rx="580" ry="90" fill="#ff8030" opacity={tod==='night'?0:0.12} filter="url(#sb)"/>
-      <path d="M0,690 Q220,600 440,650 Q660,600 720,630 Q900,565 1100,640 Q1300,600 1440,640 L1440,800 L0,800Z" fill="rgba(0,0,0,0.22)"/>
-      <path d="M0,755 Q360,710 720,740 Q1080,710 1440,750 L1440,800 L0,800Z" fill="rgba(0,0,0,0.30)"/>
-    </svg>
+    <>
+      {/* Ringed planet, lower left */}
+      <div style={{ position: 'absolute', left: '4%', bottom: '8%', animation: 'drift 38s ease-in-out infinite', opacity: 0.85 }}>
+        <svg width="220" height="160" viewBox="0 0 220 160">
+          <defs>
+            <radialGradient id="pl1" cx="38%" cy="32%" r="75%">
+              <stop offset="0%" stopColor="#e8c9a0"/>
+              <stop offset="55%" stopColor="#a8825e"/>
+              <stop offset="100%" stopColor="#2e1f14"/>
+            </radialGradient>
+            <linearGradient id="ring1" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(230,210,180,0)"/>
+              <stop offset="30%" stopColor="rgba(230,210,180,0.7)"/>
+              <stop offset="70%" stopColor="rgba(190,170,220,0.55)"/>
+              <stop offset="100%" stopColor="rgba(230,210,180,0)"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="110" cy="82" rx="100" ry="26" fill="none" stroke="url(#ring1)" strokeWidth="7" transform="rotate(-16 110 82)"/>
+          <circle cx="110" cy="80" r="46" fill="url(#pl1)"/>
+          <ellipse cx="110" cy="82" rx="100" ry="26" fill="none" stroke="url(#ring1)" strokeWidth="3.5" opacity="0.5" transform="rotate(-16 110 82)" clipPath="inset(0 0 50% 0)"/>
+        </svg>
+      </div>
+      {/* Blue planet + orbiting moon, mid right */}
+      <div style={{ position: 'absolute', right: '10%', top: '46%', animation: 'drift2 46s ease-in-out infinite', opacity: 0.7 }}>
+        <div style={{ position: 'relative', width: 90, height: 90 }}>
+          <svg width="90" height="90" viewBox="0 0 90 90">
+            <defs>
+              <radialGradient id="pl2" cx="36%" cy="30%" r="78%">
+                <stop offset="0%" stopColor="#b8d4ff"/>
+                <stop offset="55%" stopColor="#4a6bc8"/>
+                <stop offset="100%" stopColor="#101a3e"/>
+              </radialGradient>
+            </defs>
+            <circle cx="45" cy="45" r="34" fill="url(#pl2)"/>
+            <ellipse cx="38" cy="36" rx="14" ry="6" fill="rgba(255,255,255,0.18)" transform="rotate(-18 38 36)"/>
+          </svg>
+          <div style={{ position: 'absolute', left: 38, top: 41, width: 9, height: 9, animation: 'orbitMoon 14s linear infinite' }}>
+            <div style={{ width: 9, height: 9, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #f0ead8, #6b6455)' }}/>
+          </div>
+        </div>
+      </div>
+      {/* Distant red dwarf, top left */}
+      <div style={{ position: 'absolute', left: '22%', top: '12%', animation: 'drift 52s ease-in-out 4s infinite', opacity: 0.5 }}>
+        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'radial-gradient(circle at 36% 30%, #ffb09a, #b04230 60%, #381008)', boxShadow: '0 0 30px rgba(255,110,80,0.35)' }}/>
+      </div>
+    </>
   )
 }
 
-function MountainLayer({ tod }: { tod: TimeOfDay }) {
-  const dark = tod === 'night'
-  const snow = dark ? 0.35 : 0.90
-  const mist = dark ? 0.06 : 0.20
+// ─── Ambient space background ─────────────────────────────────────────────────
+
+function SpaceBg() {
   return (
-    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
-      <defs>
-        <linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="white" stopOpacity={mist}/>
-          <stop offset="100%" stopColor="white" stopOpacity="0"/>
-        </linearGradient>
-        <filter id="mf"><feGaussianBlur stdDeviation="14"/></filter>
-      </defs>
-      {/* Far range */}
-      <path d="M-80,700 L200,260 L400,490 L560,180 L730,460 L910,130 L1090,400 L1270,230 L1440,440 L1540,700Z" fill={dark?'rgba(12,18,32,0.88)':'rgba(110,148,178,0.68)'}/>
-      <path d="M560,180 L522,308 L598,308Z" fill={`rgba(255,255,255,${snow*0.60})`}/>
-      <path d="M910,130 L867,268 L953,268Z" fill={`rgba(255,255,255,${snow*0.82})`}/>
-      <path d="M1270,230 L1232,348 L1308,348Z" fill={`rgba(255,255,255,${snow*0.50})`}/>
-      {/* Mid range */}
-      <path d="M-80,750 L110,465 L290,590 L470,334 L650,545 L830,358 L1010,525 L1190,384 L1350,508 L1540,750Z" fill={dark?'rgba(8,13,26,0.94)':'rgba(72,104,136,0.84)'}/>
-      <path d="M470,334 L438,440 L502,440Z" fill={`rgba(255,255,255,${snow})`}/>
-      <path d="M830,358 L800,458 L860,458Z" fill={`rgba(255,255,255,${snow})`}/>
-      <path d="M1190,384 L1162,478 L1218,478Z" fill={`rgba(255,255,255,${snow*0.88})`}/>
-      {/* Foreground */}
-      <path d="M0,778 Q360,726 720,758 Q1080,726 1440,768 L1440,800 L0,800Z" fill={dark?'rgba(4,8,18,1)':'rgba(42,64,84,0.96)'}/>
-      {/* Mist */}
-      <rect x="-60" y="470" width="1560" height="210" fill="url(#mg)" filter="url(#mf)" style={{ animation:'mistMove 28s linear infinite' }}/>
-    </svg>
-  )
-}
-
-function OceanLayer({ tod }: { tod: TimeOfDay }) {
-  const wop = tod === 'night' ? 0.12 : 0.32
-  const glop = tod === 'evening' ? 0.45 : tod === 'night' ? 0 : 0.28
-  return (
-    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
-      <defs>
-        <radialGradient id="hg" cx="50%" cy="0%" r="65%">
-          <stop offset="0%"   stopColor="#ffe8b0" stopOpacity={glop}/>
-          <stop offset="100%" stopColor="transparent" stopOpacity="0"/>
-        </radialGradient>
-        <filter id="wf"><feGaussianBlur stdDeviation="4"/></filter>
-      </defs>
-      <rect x="0" y="440" width="1440" height="360" fill={tod==='night'?'rgba(8,22,42,0.55)':'rgba(24,84,124,0.22)'}/>
-      <rect x="0" y="330" width="1440" height="160" fill="url(#hg)"/>
-      <path d="M-100,460 Q200,422 400,455 Q600,488 800,445 Q1000,402 1200,445 Q1400,488 1640,455" stroke={`rgba(255,255,255,${wop*0.5})`} strokeWidth="2" fill="none" style={{ animation:'wv1 15s ease-in-out infinite' }}/>
-      <path d="M-100,522 Q220,488 440,520 Q660,552 880,512 Q1100,472 1320,512 Q1440,532 1640,512" stroke={`rgba(255,255,255,${wop*0.72})`} strokeWidth="2.5" fill="none" style={{ animation:'wv2 11s ease-in-out infinite' }}/>
-      <path d="M-100,592 Q240,555 460,590 Q680,625 900,580 Q1120,535 1340,578 Q1460,598 1640,572" stroke={`rgba(255,255,255,${wop})`} strokeWidth="3" fill="none" style={{ animation:'wv3 8s ease-in-out infinite' }}/>
-      <path d="M0,685 Q360,665 720,675 Q1080,665 1440,672 L1440,800 L0,800Z" fill={tod==='night'?'rgba(8,18,38,0.68)':'rgba(255,255,255,0.05)'}/>
-    </svg>
-  )
-}
-
-function ForestLayer({ tod }: { tod: TimeOfDay }) {
-  const dark = tod === 'night'
-  const rop = tod === 'morning' ? 0.11 : tod === 'afternoon' ? 0.08 : 0.02
-  const fop = tod === 'morning' ? 0.16 : dark ? 0.07 : 0.09
-  return (
-    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
-      <defs>
-        <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="rgba(200,220,208,0)" />
-          <stop offset="50%"  stopColor={`rgba(200,220,208,${fop})`}/>
-          <stop offset="100%" stopColor="rgba(200,220,208,0)"/>
-        </linearGradient>
-        <filter id="ff"><feGaussianBlur stdDeviation="10"/></filter>
-      </defs>
-      {[0,1,2,3].map(i => (
-        <polygon key={i}
-          points={`${180+i*130},0 ${162+i*130},0 ${290+i*190},800 ${340+i*190},800`}
-          fill={`rgba(255,240,190,${rop})`}
-          style={{ animation:`rayPulse ${6+i*2}s ease-in-out ${i*1.5}s infinite alternate` }}
-          transform={`skewX(${-8+i*4})`}/>
-      ))}
-      {Array.from({length:20}).map((_,i) => {
-        const x=i*78-20; const h=260+Math.sin(i*1.4)*80; const w=54+Math.cos(i*1.1)*18
-        return <polygon key={i} points={`${x+w/2},${548-h} ${x},565 ${x+w},565`} fill={dark?'rgba(4,10,6,0.88)':'rgba(18,46,28,0.68)'}/>
-      })}
-      {Array.from({length:14}).map((_,i) => {
-        const x=i*112-10; const h=195+Math.sin(i*1.7)*58; const w=78+Math.cos(i*1.3)*24
-        return <polygon key={i} points={`${x+w/2},${648-h} ${x},665 ${x+w},665`} fill={dark?'rgba(3,8,4,0.93)':'rgba(13,38,20,0.84)'}/>
-      })}
-      {Array.from({length:10}).map((_,i) => {
-        const x=i*162-22; const h=155+Math.sin(i*2)*48; const w=98+Math.cos(i*1.5)*28
-        return <polygon key={i} points={`${x+w/2},${755-h} ${x},772 ${x+w},772`} fill={dark?'rgba(2,5,3,1)':'rgba(9,26,14,0.94)'}/>
-      })}
-      <path d="M0,772 Q720,760 1440,772 L1440,800 L0,800Z" fill={dark?'rgba(2,4,2,1)':'rgba(7,20,10,1)'}/>
-      <rect x="-60" y="575" width="1560" height="230" fill="url(#fg)" filter="url(#ff)" style={{ animation:'fogMove 32s linear infinite' }}/>
-    </svg>
-  )
-}
-
-// ─── Grain texture ────────────────────────────────────────────────────────────
-
-function GrainLayer() {
-  return (
-    <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0.035 }} xmlns="http://www.w3.org/2000/svg">
-      <filter id="grain-f">
-        <feTurbulence type="fractalNoise" baseFrequency="0.68" numOctaves="4" stitchTiles="stitch"/>
-        <feColorMatrix type="saturate" values="0"/>
-      </filter>
-      <rect width="100%" height="100%" filter="url(#grain-f)" style={{ animation:'grain 0.8s steps(4) infinite' }}/>
-    </svg>
-  )
-}
-
-// ─── Ambient background ───────────────────────────────────────────────────────
-
-function AmbientBg({ landscape, tod }: { landscape: Landscape; tod: TimeOfDay }) {
-  const [g1,g2,g3,g4] = LS_GRAD[landscape][tod]
-  const { overlay, tint } = SCENE[landscape][tod]
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:0, overflow:'hidden' }}>
-      {/* Layer 1: Base gradient */}
-      <div style={{ position:'absolute', inset:0, background:`linear-gradient(180deg,${g1} 0%,${g2} 33%,${g3} 66%,${g4} 100%)`, transition:'background 2.5s ease' }}/>
-      {/* Layer 2: Landscape SVG */}
-      {landscape === 'sunset'   && <SunsetLayer   tod={tod}/>}
-      {landscape === 'mountain' && <MountainLayer tod={tod}/>}
-      {landscape === 'ocean'    && <OceanLayer    tod={tod}/>}
-      {landscape === 'forest'   && <ForestLayer   tod={tod}/>}
-      {/* Layer 3: Color grading */}
-      <div style={{ position:'absolute', inset:0, background:tint, transition:'background 2s ease' }}/>
-      {/* Layer 4: Brightness damping (WCAG contrast engine) */}
-      <div style={{ position:'absolute', inset:0, background:`rgba(0,0,0,${overlay})`, transition:'opacity 2s ease' }}/>
-      {/* Layer 5: Vignette */}
-      <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.45) 100%)' }}/>
-      {/* Layer 6: Grain */}
-      <GrainLayer/>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', background: 'radial-gradient(ellipse at 70% 20%, #0c1030 0%, #070918 45%, #030308 100%)' }}>
+      {/* Nebulae */}
+      <div style={{ position: 'absolute', left: '-12%', top: '30%', width: '55%', height: '60%', background: 'radial-gradient(ellipse, rgba(120,80,200,0.16) 0%, transparent 65%)', animation: 'nebulaSh 22s ease-in-out infinite', filter: 'blur(10px)' }}/>
+      <div style={{ position: 'absolute', right: '-8%', bottom: '-10%', width: '50%', height: '55%', background: 'radial-gradient(ellipse, rgba(40,120,180,0.14) 0%, transparent 65%)', animation: 'nebulaSh 28s ease-in-out 6s infinite', filter: 'blur(10px)' }}/>
+      <div style={{ position: 'absolute', left: '35%', top: '-15%', width: '45%', height: '45%', background: 'radial-gradient(ellipse, rgba(200,120,90,0.08) 0%, transparent 60%)', animation: 'nebulaSh 26s ease-in-out 3s infinite', filter: 'blur(10px)' }}/>
+      <SpaceCanvas/>
+      <Planets/>
+      {/* Vignette */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,5,0.5) 100%)' }}/>
     </div>
   )
 }
 
-// ─── Glass panel (Layer 7 — UI surface) ──────────────────────────────────────
-// rgba(0,0,0,0.30) base guarantees WCAG AA compliance across all scene configs
+// ─── Glass panel with tilt micro-interaction ──────────────────────────────────
 
-function Glass({ children, style, float }: { children: React.ReactNode; style?: React.CSSProperties; float?: boolean }) {
+function Glass({ children, style, glow }: { children: React.ReactNode; style?: React.CSSProperties; glow?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
   const [hov, setHov] = useState(false)
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const rx = ((e.clientY - r.top) / r.height - 0.5) * -2.4
+    const ry = ((e.clientX - r.left) / r.width - 0.5) * 2.4
+    el.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-2px)`
+  }
+  const onLeave = () => {
+    setHov(false)
+    if (ref.current) ref.current.style.transform = 'perspective(900px) rotateX(0) rotateY(0) translateY(0)'
+  }
   return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+    <div ref={ref}
+      onMouseEnter={() => setHov(true)} onMouseMove={onMove} onMouseLeave={onLeave}
       style={{
-        background: hov ? 'rgba(0,0,0,0.32)' : 'rgba(0,0,0,0.28)',
-        backdropFilter: 'blur(32px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(160%)',
+        background: hov ? 'rgba(14,16,38,0.62)' : 'rgba(12,14,34,0.52)',
+        backdropFilter: 'blur(28px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(150%)',
         border: `1px solid ${hov ? C.borderHov : C.border}`,
         borderRadius: 22,
         boxShadow: hov
-          ? '0 24px 64px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12)'
-          : '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07)',
-        transition: 'all 0.32s cubic-bezier(0.4,0,0.2,1)',
-        animation: float ? 'float 8s ease-in-out infinite' : undefined,
-        transform: hov ? 'translateY(-2px)' : 'translateY(0)',
+          ? `0 26px 70px rgba(0,0,8,0.5), 0 0 0 1px rgba(170,185,255,0.06), inset 0 1px 0 rgba(200,210,255,0.13)${glow ? `, 0 0 44px ${glow}` : ''}`
+          : `0 10px 36px rgba(0,0,8,0.42), inset 0 1px 0 rgba(200,210,255,0.08)${glow ? `, 0 0 26px ${glow}` : ''}`,
+        transition: 'background 0.3s, border 0.3s, box-shadow 0.4s, transform 0.25s ease-out',
+        willChange: 'transform',
         ...style,
       }}
     >{children}</div>
   )
 }
 
-// ─── Glass input ──────────────────────────────────────────────────────────────
-
 const gIn: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.08)', border: `1px solid ${C.border}`, borderRadius: 10,
-  padding: '10px 14px', color: C.text, width: '100%', boxSizing: 'border-box', outline: 'none',
-  ...T.body,
+  background: 'rgba(170,185,255,0.07)', border: `1px solid ${C.border}`, borderRadius: 10,
+  padding: '10px 14px', color: C.text, width: '100%', boxSizing: 'border-box', outline: 'none', ...T.body,
 }
-
-// ─── Widget label ─────────────────────────────────────────────────────────────
 
 function WLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18 }}>
-      <span style={{ color: C.champagne, opacity:0.8, display:'flex' }}>{icon}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+      <span style={{ color: C.gold, opacity: 0.85, display: 'flex' }}>{icon}</span>
       <span style={{ ...T.label, color: C.textMuted }}>{children}</span>
-    </div>
-  )
-}
-
-// ─── Landscape selector ───────────────────────────────────────────────────────
-
-const LS_OPTS: { key: Landscape; label: string; icon: React.ReactNode }[] = [
-  { key:'sunset',   label:'Sunset',   icon:<Sun size={14} strokeWidth={1.5}/> },
-  { key:'mountain', label:'Mountain', icon:<Mountain size={14} strokeWidth={1.5}/> },
-  { key:'ocean',    label:'Ocean',    icon:<Waves size={14} strokeWidth={1.5}/> },
-  { key:'forest',   label:'Forest',   icon:<Leaf size={14} strokeWidth={1.5}/> },
-]
-
-function LandscapeSelector({ value, onChange }: { value: Landscape; onChange: (l: Landscape) => void }) {
-  const [open, setOpen] = useState(false)
-  const cur = LS_OPTS.find(o => o.key === value)!
-  return (
-    <div style={{ position:'relative' }}>
-      <button onClick={() => setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(0,0,0,0.30)', backdropFilter:'blur(20px)', border:`1px solid ${C.border}`, borderRadius:22, color:C.textSub, padding:'8px 18px', cursor:'pointer', ...T.sm, fontWeight:500 }}>
-        <span style={{ display:'flex', color:C.champagne }}>{cur.icon}</span>
-        <span>{cur.label}</span>
-        <ChevronDown size={11} strokeWidth={2}/>
-      </button>
-      {open && (
-        <div style={{ position:'absolute', top:46, right:0, background:'rgba(8,8,12,0.88)', backdropFilter:'blur(36px)', border:`1px solid ${C.border}`, borderRadius:18, padding:8, zIndex:200, minWidth:170, boxShadow:'0 24px 64px rgba(0,0,0,0.5)' }}>
-          {LS_OPTS.map(o => (
-            <button key={o.key} onClick={() => { onChange(o.key); setOpen(false) }}
-              style={{ display:'flex', alignItems:'center', gap:10, width:'100%', background: value===o.key ? 'rgba(255,255,255,0.10)' : 'transparent', border:'none', borderRadius:11, color: value===o.key ? C.text : C.textSub, padding:'11px 16px', cursor:'pointer', ...T.sm, fontWeight: value===o.key?600:400, transition:'background 0.15s' }}
-              onMouseEnter={e => { if(value!==o.key) e.currentTarget.style.background='rgba(255,255,255,0.06)' }}
-              onMouseLeave={e => { if(value!==o.key) e.currentTarget.style.background='transparent' }}
-            >
-              <span style={{ color:C.champagne, display:'flex' }}>{o.icon}</span>{o.label}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -392,71 +302,52 @@ function LandscapeSelector({ value, onChange }: { value: Landscape; onChange: (l
 
 function FocusMode({ task, onExit }: { task: Task; onExit: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onExit() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onExit() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
   }, [onExit])
-
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:900, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer' }}
-      onClick={onExit}>
-      {/* Dark overlay */}
-      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.90)', backdropFilter:'blur(48px) saturate(60%)', WebkitBackdropFilter:'blur(48px) saturate(60%)' }}/>
-      {/* Breathing ring */}
-      <div style={{ position:'absolute', width:320, height:320, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.08)', animation:'breathe 5s ease-in-out infinite' }}/>
-      <div style={{ position:'absolute', width:240, height:240, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.05)', animation:'breathe 5s ease-in-out 0.8s infinite' }}/>
-      {/* Content */}
-      <div onClick={e => e.stopPropagation()} style={{ position:'relative', textAlign:'center', maxWidth:560, padding:'0 40px', animation:'focusIn 0.5s cubic-bezier(0.4,0,0.2,1) both' }}>
-        <div style={{ ...T.label, color: C.champagne, marginBottom:28, opacity:0.7 }}>Focus Mode</div>
-        <div style={{ ...T.display, color: C.text, marginBottom:task.due_date?20:40, fontSize: task.title.length > 40 ? 36 : task.title.length > 25 ? 44 : 56 }}>
-          {task.title}
-        </div>
-        {task.due_date && (
-          <div style={{ ...T.body, color: C.textMuted, marginBottom:40 }}>Due {task.due_date}</div>
-        )}
-        <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'center', color: C.textMuted, ...T.sm }}>
-          <span>Press Esc or click anywhere to exit</span>
-        </div>
+    <div onClick={onExit} style={{ position: 'fixed', inset: 0, zIndex: 900, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,3,10,0.92)', backdropFilter: 'blur(48px)' }}/>
+      <div style={{ position: 'absolute', width: 340, height: 340, borderRadius: '50%', border: '1px solid rgba(170,185,255,0.10)', animation: 'breathe 5s ease-in-out infinite' }}/>
+      <div style={{ position: 'absolute', width: 250, height: 250, borderRadius: '50%', border: '1px solid rgba(255,216,160,0.08)', animation: 'breathe 5s ease-in-out 0.8s infinite' }}/>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', textAlign: 'center', maxWidth: 580, padding: '0 40px', animation: 'focusIn 0.5s ease both' }}>
+        <div style={{ ...T.label, color: C.gold, marginBottom: 28, opacity: 0.75 }}>Focus Mode</div>
+        <div style={{ ...T.display, color: C.text, fontSize: task.title.length > 40 ? 36 : task.title.length > 25 ? 46 : 58, marginBottom: 36 }}>{task.title}</div>
+        <div style={{ ...T.sm, color: C.textMuted }}>Press Esc or click anywhere to exit</div>
       </div>
-      {/* Exit button */}
-      <button onClick={onExit} style={{ position:'absolute', top:28, right:28, background:'rgba(255,255,255,0.08)', border:`1px solid ${C.border}`, borderRadius:12, color:C.textSub, padding:'8px 18px', cursor:'pointer', ...T.sm, fontWeight:500 }}>
-        Exit Focus
-      </button>
+      <button onClick={onExit} style={{ position: 'absolute', top: 28, right: 28, background: 'rgba(170,185,255,0.08)', border: `1px solid ${C.border}`, borderRadius: 12, color: C.textSub, padding: '8px 18px', cursor: 'pointer', ...T.sm, fontWeight: 500 }}>Exit Focus</button>
     </div>
   )
 }
 
-// ─── Mini calendar ────────────────────────────────────────────────────────────
+// ─── Compact calendar ─────────────────────────────────────────────────────────
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
 function MiniCalendar() {
   const now = new Date()
   const [yr, setYr] = useState(now.getFullYear())
   const [mo, setMo] = useState(now.getMonth())
   const first = new Date(yr, mo, 1).getDay()
-  const dim = new Date(yr, mo+1, 0).getDate()
-  const cells = Array.from({ length: first+dim }, (_,i) => i < first ? null : i-first+1)
-  const td = now.getDate(), isCur = yr===now.getFullYear() && mo===now.getMonth()
-  const prev = () => mo===0 ? (setMo(11), setYr(y=>y-1)) : setMo(m=>m-1)
-  const next = () => mo===11 ? (setMo(0), setYr(y=>y+1)) : setMo(m=>m+1)
+  const dim = new Date(yr, mo + 1, 0).getDate()
+  const cells = Array.from({ length: first + dim }, (_, i) => i < first ? null : i - first + 1)
+  const td = now.getDate(), isCur = yr === now.getFullYear() && mo === now.getMonth()
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-        <button onClick={prev} style={{ background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex', padding:4 }}><ChevronLeft size={13} strokeWidth={2}/></button>
-        <span style={{ ...T.sm, color: C.textSub, fontWeight:500 }}>{MONTHS[mo].slice(0,3)} {yr}</span>
-        <button onClick={next} style={{ background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex', padding:4 }}><ChevronRight size={13} strokeWidth={2}/></button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <button onClick={() => mo === 0 ? (setMo(11), setYr(y => y - 1)) : setMo(m => m - 1)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex', padding: 2 }}><ChevronLeft size={12}/></button>
+        <span style={{ ...T.label, fontSize: 9.5, color: C.textSub }}>{MONTHS[mo].slice(0, 3)} {yr}</span>
+        <button onClick={() => mo === 11 ? (setMo(0), setYr(y => y + 1)) : setMo(m => m + 1)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex', padding: 2 }}><ChevronRight size={12}/></button>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1 }}>
-        {DAY_LABELS.map(d => <div key={d} style={{ ...T.label, textAlign:'center', color:C.textMuted, padding:'2px 0', fontSize:8 }}>{d}</div>)}
-        {cells.map((d,i) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 0 }}>
+        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ ...T.label, fontSize: 7.5, textAlign: 'center', color: C.textMuted, padding: '1px 0' }}>{d}</div>)}
+        {cells.map((d, i) => (
           <div key={i} style={{
-            textAlign:'center', fontSize:11, padding:'5px 2px', borderRadius:7,
-            background: d && isCur && d===td ? 'rgba(224,204,158,0.22)' : 'transparent',
-            color: d ? (isCur && d===td ? C.champagne : C.textMuted) : 'transparent',
-            fontWeight: d && isCur && d===td ? 700 : 400,
-            border: d && isCur && d===td ? '1px solid rgba(224,204,158,0.35)' : '1px solid transparent',
+            textAlign: 'center', fontSize: 10, padding: '3px 1px', borderRadius: 6, ...T.num,
+            background: d && isCur && d === td ? 'rgba(255,216,160,0.20)' : 'transparent',
+            color: d ? (isCur && d === td ? C.gold : C.textMuted) : 'transparent',
+            fontWeight: d && isCur && d === td ? 700 : 400,
           }}>{d ?? ''}</div>
         ))}
       </div>
@@ -464,57 +355,48 @@ function MiniCalendar() {
   )
 }
 
-// ─── Sidebar tasks (with focus trigger) ───────────────────────────────────────
+// ─── Sidebar tasks ────────────────────────────────────────────────────────────
 
 function SidebarTasks({ onFocus }: { onFocus: (t: Task) => void }) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTask, setNewTask] = useState('')
-  const [justDone, setJustDone] = useState<number|null>(null)
-  const [hovId, setHovId] = useState<number|null>(null)
-  const load = useCallback(async () => { const r=await fetch('/api/tasks'); setTasks(await r.json()) }, [])
+  const [justDone, setJustDone] = useState<number | null>(null)
+  const [hovId, setHovId] = useState<number | null>(null)
+  const load = useCallback(async () => { const r = await fetch('/api/tasks'); setTasks(await r.json()) }, [])
   useEffect(() => { load() }, [load])
-
   const toggle = async (t: Task) => {
-    if (!t.done) { setJustDone(t.id); setTimeout(()=>setJustDone(null), 600) }
-    await fetch('/api/tasks', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id:t.id, done:!t.done }) })
+    if (!t.done) { setJustDone(t.id); setTimeout(() => setJustDone(null), 600) }
+    await fetch('/api/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: t.id, done: !t.done }) })
     load()
   }
   const add = async () => {
     if (!newTask.trim()) return
-    await fetch('/api/tasks', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ title:newTask.trim() }) })
+    await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTask.trim() }) })
     setNewTask(''); load()
   }
-
   return (
-    <div>
-      <div style={{ ...T.label, color: C.textMuted, marginBottom:12 }}>Tasks</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:190, overflowY:'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      <div style={{ ...T.label, color: C.textMuted, marginBottom: 10 }}>Tasks</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto', flex: 1, minHeight: 0 }}>
         {tasks.map(t => (
-          <div key={t.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', position:'relative' }}
-            onMouseEnter={() => setHovId(t.id)} onMouseLeave={() => setHovId(null)}>
-            <button onClick={() => toggle(t)} style={{ background:'none', border:'none', padding:0, cursor:'pointer', display:'flex', animation: justDone===t.id ? 'taskPop 0.5s ease' : undefined }}>
-              <div style={{
-                width:15, height:15, borderRadius:4, border: t.done ? 'none' : `1.5px solid ${C.textMuted}`,
-                background: t.done ? 'rgba(160,210,170,0.55)' : 'rgba(255,255,255,0.05)',
-                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-                boxShadow: justDone===t.id ? '0 0 14px rgba(160,210,170,0.7)' : 'none',
-                transition:'all 0.28s ease',
-              }}>
-                {t.done && <Check size={9} color="rgba(40,80,40,0.9)" strokeWidth={2.5}/>}
+          <div key={t.id} onMouseEnter={() => setHovId(t.id)} onMouseLeave={() => setHovId(null)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+            <button onClick={() => toggle(t)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', animation: justDone === t.id ? 'taskPop 0.5s ease' : undefined }}>
+              <div style={{ width: 15, height: 15, borderRadius: 4, border: t.done ? 'none' : `1.5px solid ${C.textMuted}`, background: t.done ? 'rgba(150,168,255,0.55)' : 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: justDone === t.id ? '0 0 14px rgba(150,168,255,0.7)' : 'none', transition: 'all 0.28s' }}>
+                {t.done && <Check size={9} color="rgba(20,25,60,0.95)" strokeWidth={2.5}/>}
               </div>
             </button>
-            <span style={{ ...T.sm, flex:1, color: t.done ? C.textMuted : C.textSub, textDecoration: t.done ? 'line-through' : 'none', transition:'all 0.25s', lineHeight:1.4 }}>{t.title}</span>
-            {hovId===t.id && !t.done && (
-              <button onClick={() => onFocus(t)} style={{ background:'none', border:'none', cursor:'pointer', color:C.textMuted, display:'flex', padding:0, flexShrink:0 }} title="Focus on this task">
+            <span style={{ ...T.sm, flex: 1, color: t.done ? C.textMuted : C.textSub, textDecoration: t.done ? 'line-through' : 'none', lineHeight: 1.4 }}>{t.title}</span>
+            {hovId === t.id && !t.done && (
+              <button onClick={() => onFocus(t)} title="Focus on this task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gold, display: 'flex', padding: 0, flexShrink: 0 }}>
                 <Target size={12} strokeWidth={1.5}/>
               </button>
             )}
           </div>
         ))}
       </div>
-      <div style={{ display:'flex', gap:7, marginTop:12 }}>
-        <input value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()} placeholder="Add task..." style={{ ...gIn, fontSize:11, padding:'7px 10px' }}/>
-        <button onClick={add} style={{ background:'rgba(255,255,255,0.12)', border:`1px solid ${C.border}`, borderRadius:8, color:C.textSub, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 10px', cursor:'pointer', flexShrink:0 }}><Plus size={14} strokeWidth={2}/></button>
+      <div style={{ display: 'flex', gap: 7, marginTop: 10 }}>
+        <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="Add task..." style={{ ...gIn, fontSize: 11, padding: '7px 10px' }}/>
+        <button onClick={add} style={{ background: 'rgba(170,185,255,0.12)', border: `1px solid ${C.border}`, borderRadius: 8, color: C.textSub, display: 'flex', alignItems: 'center', padding: '0 10px', cursor: 'pointer', flexShrink: 0 }}><Plus size={14}/></button>
       </div>
     </div>
   )
@@ -523,53 +405,46 @@ function SidebarTasks({ onFocus }: { onFocus: (t: Task) => void }) {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 const NAV: { id: Page; label: string; icon: React.ReactNode; sub?: { id: string; label: string }[] }[] = [
-  { id:'dashboard', label:'Dashboard', icon:<LayoutGrid size={15} strokeWidth={1.5}/> },
-  { id:'projects',  label:'Projects',  icon:<Layers size={15} strokeWidth={1.5}/> },
-  { id:'health',    label:'Health',    icon:<Heart size={15} strokeWidth={1.5}/> },
-  { id:'family',    label:'Family',    icon:<Home size={15} strokeWidth={1.5}/>, sub:[{id:'kids',label:'Kids'},{id:'wife',label:'Wife'},{id:'parents',label:'Parents'}] },
-  { id:'friends',   label:'Friends',   icon:<Users size={15} strokeWidth={1.5}/> },
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutGrid size={15} strokeWidth={1.5}/> },
+  { id: 'projects',  label: 'Projects',  icon: <Layers size={15} strokeWidth={1.5}/> },
+  { id: 'health',    label: 'Health',    icon: <Heart size={15} strokeWidth={1.5}/> },
+  { id: 'family',    label: 'Family',    icon: <Home size={15} strokeWidth={1.5}/>, sub: [{ id: 'kids', label: 'Kids' }, { id: 'wife', label: 'Wife' }, { id: 'parents', label: 'Parents' }] },
+  { id: 'friends',   label: 'Friends',   icon: <Users size={15} strokeWidth={1.5}/> },
+  { id: 'resources', label: 'Resources', icon: <BookOpen size={15} strokeWidth={1.5}/> },
 ]
 
-function Sidebar({ page, setPage, familySub, setFamilySub, tod, onFocus }: {
-  page: Page; setPage: (p: Page) => void; familySub: string; setFamilySub: (s: string) => void
-  tod: TimeOfDay; onFocus: (t: Task) => void
+function Sidebar({ page, setPage, familySub, setFamilySub, onFocus }: {
+  page: Page; setPage: (p: Page) => void; familySub: string; setFamilySub: (s: string) => void; onFocus: (t: Task) => void
 }) {
+  const h = new Date().getHours()
+  const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Good night'
   return (
     <div style={{
-      width:268, minHeight:'100vh', flexShrink:0, position:'sticky', top:0, height:'100vh', overflowY:'auto',
-      background:'rgba(0,0,0,0.32)', backdropFilter:'blur(48px) saturate(150%)', WebkitBackdropFilter:'blur(48px) saturate(150%)',
-      borderRight:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column',
+      width: 256, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column',
+      background: 'rgba(6,8,22,0.62)', backdropFilter: 'blur(44px) saturate(140%)', WebkitBackdropFilter: 'blur(44px) saturate(140%)',
+      borderRight: '1px solid rgba(160,175,255,0.08)',
     }}>
-      {/* Brand */}
-      <div style={{ padding:'30px 24px 22px' }}>
-        <div style={{ ...T.label, color: C.champagne, marginBottom:4 }}>Dr Muhammad Qasim</div>
-        <div style={{ ...T.label, color: C.textMuted, fontWeight:400, letterSpacing:'0.06em' }}>Command Centre</div>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:16, ...T.sm, color: C.textMuted }}>
-          <span style={{ display:'flex', color:C.champagne, opacity:0.7 }}>{TOD_DATA[tod].icon}</span>
-          <span>{TOD_DATA[tod].greeting}</span>
-        </div>
+      <div style={{ padding: '24px 22px 16px' }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 400, color: C.text, letterSpacing: '-0.01em' }}>Dr Muhammad Qasim</div>
+        <div style={{ ...T.label, color: C.gold, marginTop: 4 }}>Command Centre</div>
+        <div style={{ ...T.sm, color: C.textMuted, marginTop: 10 }}>{greeting}</div>
       </div>
-
-      {/* Nav */}
-      <nav style={{ padding:'0 12px', flex:1 }}>
+      <nav style={{ padding: '0 12px' }}>
         {NAV.map(item => {
           const active = page === item.id
           return (
             <div key={item.id}>
               <div onClick={() => setPage(item.id)}
-                style={{ display:'flex', alignItems:'center', gap:11, padding:'11px 14px', borderRadius:12, cursor:'pointer', marginBottom:3, background: active ? 'rgba(255,255,255,0.10)' : 'transparent', color: active ? C.text : C.textMuted, border: active ? `1px solid rgba(255,255,255,0.12)` : '1px solid transparent', transition:'all 0.2s', ...T.body, fontWeight: active ? 500 : 400 }}
-                onMouseEnter={e => { if(!active){e.currentTarget.style.background='rgba(255,255,255,0.06)'; e.currentTarget.style.color=C.textSub} }}
-                onMouseLeave={e => { if(!active){e.currentTarget.style.background='transparent'; e.currentTarget.style.color=C.textMuted} }}
-              >
-                <span style={{ display:'flex', color: active ? C.champagne : 'inherit' }}>{item.icon}</span>
+                style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 14px', borderRadius: 12, cursor: 'pointer', marginBottom: 2, background: active ? 'rgba(170,185,255,0.11)' : 'transparent', color: active ? C.text : C.textMuted, border: active ? `1px solid rgba(170,185,255,0.14)` : '1px solid transparent', transition: 'all 0.2s', ...T.body, fontSize: 13.5, fontWeight: active ? 500 : 400 }}
+                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(170,185,255,0.06)'; e.currentTarget.style.color = C.textSub } }}
+                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.textMuted } }}>
+                <span style={{ display: 'flex', color: active ? C.gold : 'inherit' }}>{item.icon}</span>
                 {item.label}
               </div>
               {item.sub && active && (
-                <div style={{ paddingLeft:40, marginBottom:4 }}>
+                <div style={{ paddingLeft: 40, marginBottom: 4 }}>
                   {item.sub.map(s => (
-                    <div key={s.id} onClick={() => setFamilySub(s.id)}
-                      style={{ ...T.sm, padding:'7px 12px', borderRadius:9, cursor:'pointer', color: familySub===s.id ? C.champagne : C.textMuted, background: familySub===s.id ? 'rgba(224,204,158,0.10)' : 'transparent', marginBottom:2, transition:'all 0.15s' }}
-                    >{s.label}</div>
+                    <div key={s.id} onClick={() => setFamilySub(s.id)} style={{ ...T.sm, padding: '6px 12px', borderRadius: 9, cursor: 'pointer', color: familySub === s.id ? C.gold : C.textMuted, background: familySub === s.id ? 'rgba(255,216,160,0.09)' : 'transparent', marginBottom: 1 }}>{s.label}</div>
                   ))}
                 </div>
               )}
@@ -577,177 +452,206 @@ function Sidebar({ page, setPage, familySub, setFamilySub, tod, onFocus }: {
           )
         })}
       </nav>
-
-      <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'14px 22px' }}/>
-
-      <div style={{ padding:'0 20px 16px' }}>
-        <div style={{ ...T.label, color:C.textMuted, marginBottom:12 }}>Calendar</div>
-        <MiniCalendar/>
-      </div>
-
-      <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'0 22px 14px' }}/>
-
-      <div style={{ padding:'0 20px 30px' }}>
+      <div style={{ height: 1, background: 'rgba(160,175,255,0.06)', margin: '12px 20px' }}/>
+      <div style={{ padding: '0 18px' }}><MiniCalendar/></div>
+      <div style={{ height: 1, background: 'rgba(160,175,255,0.06)', margin: '12px 20px' }}/>
+      <div style={{ padding: '0 18px 20px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <SidebarTasks onFocus={onFocus}/>
       </div>
     </div>
   )
 }
 
-// ─── Weather icon helper ──────────────────────────────────────────────────────
+// ─── Weather ──────────────────────────────────────────────────────────────────
 
-function WxIcon({ code, size=36 }: { code: number; size?: number }) {
+function WxIcon({ code, size = 36 }: { code: number; size?: number }) {
   const p = { size, color: C.text, strokeWidth: 1.2 }
-  if (code === 0 || code === 1) return <Sun {...p}/>
-  if (code === 2 || code === 3) return <Cloud {...p}/>
-  if (code >= 45 && code <= 48) return <CloudFog {...p}/>
-  if (code >= 51 && code <= 65) return <CloudRain {...p}/>
-  if (code >= 71 && code <= 77) return <CloudSnow {...p}/>
-  if (code >= 80 && code <= 82) return <CloudRain {...p}/>
-  if (code >= 95)                return <CloudLightning {...p}/>
-  return <Sun {...p}/>
+  if (code <= 1) return <Sun {...p}/>
+  if (code <= 3) return <Cloud {...p}/>
+  if (code <= 48) return <CloudFog {...p}/>
+  if (code <= 65) return <CloudRain {...p}/>
+  if (code <= 77) return <CloudSnow {...p}/>
+  if (code <= 82) return <CloudRain {...p}/>
+  return <CloudLightning {...p}/>
 }
-
 const WX_DESC: Record<number, string> = { 0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm' }
 
-// ─── Widgets ──────────────────────────────────────────────────────────────────
-
 function WeatherWidget() {
-  const [wx, setWx] = useState<{ temp:number; code:number; wind:number; city:string }|null>(null)
+  const [wx, setWx] = useState<{ temp: number; code: number; wind: number; city: string } | null>(null)
   useEffect(() => {
     const load = (lat: number, lon: number, city: string) =>
       fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`)
-        .then(r=>r.json()).then(d => setWx({ temp:Math.round(d.current.temperature_2m), code:d.current.weather_code, wind:Math.round(d.current.wind_speed_10m), city }))
+        .then(r => r.json()).then(d => setWx({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code, wind: Math.round(d.current.wind_speed_10m), city }))
     navigator.geolocation?.getCurrentPosition(
       p => load(p.coords.latitude, p.coords.longitude, 'Your location'),
       () => load(51.5, -0.12, 'London')
     )
   }, [])
-
   return (
-    <Glass float style={{ padding:26 }}>
+    <Glass glow="rgba(90,140,220,0.10)" style={{ padding: 24 }}>
       <WLabel icon={<Cloud size={13} strokeWidth={1.5}/>}>Weather</WLabel>
       {wx ? (
         <>
-          <div style={{ marginBottom:12, animation:'float 11s ease-in-out infinite' }}><WxIcon code={wx.code} size={42}/></div>
-          <div style={{ ...T.display, color: C.text }}>{wx.temp}°</div>
-          <div style={{ ...T.body, color: C.textSub, marginTop:6 }}>{WX_DESC[wx.code] ?? ''}</div>
-          <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:14, ...T.sm, color: C.textMuted }}>
+          <div style={{ marginBottom: 10, animation: 'float 11s ease-in-out infinite' }}><WxIcon code={wx.code} size={40}/></div>
+          <div style={{ ...T.display, ...T.num, fontSize: 52, color: C.text }}>{wx.temp}°</div>
+          <div style={{ ...T.body, color: C.textSub, marginTop: 4 }}>{WX_DESC[wx.code] ?? ''}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, ...T.sm, color: C.textMuted }}>
             <Wind size={11} strokeWidth={1.5}/><span>{wx.wind} km/h · {wx.city}</span>
           </div>
         </>
-      ) : <div style={{ ...T.body, color:C.textMuted }}>Fetching weather...</div>}
+      ) : <div style={{ ...T.body, color: C.textMuted }}>Fetching weather...</div>}
     </Glass>
   )
 }
 
+// ─── Analog world clocks ──────────────────────────────────────────────────────
+
 const CLOCKS = [
-  { city:'London',   tz:'Europe/London',   flag:'GB' },
-  { city:'Dubai',    tz:'Asia/Dubai',       flag:'AE' },
-  { city:'New York', tz:'America/New_York', flag:'US' },
-  { city:'Lahore',   tz:'Asia/Karachi',     flag:'PK' },
+  { city: 'London',   tz: 'Europe/London' },
+  { city: 'Dubai',    tz: 'Asia/Dubai' },
+  { city: 'New York', tz: 'America/New_York' },
+  { city: 'Lahore',   tz: 'Asia/Karachi' },
 ]
 
-function ClockWidget() {
-  const [, setTick] = useState(0)
-  useEffect(() => { const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id) }, [])
-  const fmt = (tz: string) => new Date().toLocaleTimeString('en-GB', { timeZone:tz, hour:'2-digit', minute:'2-digit' })
-
+function AnalogClock({ tz, city, now }: { tz: string; city: string; now: Date }) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false }).formatToParts(now)
+  const get = (t: string) => Number(parts.find(p => p.type === t)?.value ?? 0)
+  const hh = get('hour') % 12, mm = get('minute'), ss = get('second')
+  const ha = (hh + mm / 60) * 30, ma = (mm + ss / 60) * 6, sa = ss * 6
+  const R = 34
   return (
-    <Glass float style={{ padding:26 }}>
+    <div style={{ textAlign: 'center' }}>
+      <svg width={R * 2} height={R * 2} viewBox={`0 0 ${R * 2} ${R * 2}`}>
+        <circle cx={R} cy={R} r={R - 1.5} fill="rgba(170,185,255,0.05)" stroke="rgba(170,185,255,0.20)" strokeWidth="1"/>
+        {Array.from({ length: 12 }).map((_, i) => {
+          const a = i * 30 * Math.PI / 180
+          const big = i % 3 === 0
+          return <line key={i}
+            x1={R + Math.sin(a) * (R - (big ? 8 : 5.5))} y1={R - Math.cos(a) * (R - (big ? 8 : 5.5))}
+            x2={R + Math.sin(a) * (R - 3.5)} y2={R - Math.cos(a) * (R - 3.5)}
+            stroke={big ? 'rgba(255,216,160,0.65)' : 'rgba(220,224,245,0.30)'} strokeWidth={big ? 1.6 : 1}/>
+        })}
+        <line x1={R} y1={R} x2={R + Math.sin(ha * Math.PI / 180) * (R * 0.45)} y2={R - Math.cos(ha * Math.PI / 180) * (R * 0.45)} stroke="rgba(245,246,255,0.92)" strokeWidth="2.4" strokeLinecap="round"/>
+        <line x1={R} y1={R} x2={R + Math.sin(ma * Math.PI / 180) * (R * 0.68)} y2={R - Math.cos(ma * Math.PI / 180) * (R * 0.68)} stroke="rgba(245,246,255,0.70)" strokeWidth="1.6" strokeLinecap="round"/>
+        <line x1={R} y1={R + 6} x2={R + Math.sin(sa * Math.PI / 180) * (R * 0.78)} y2={R - Math.cos(sa * Math.PI / 180) * (R * 0.78)} stroke={C.gold} strokeWidth="1" strokeLinecap="round" style={{ transformOrigin: `${R}px ${R}px` }}/>
+        <circle cx={R} cy={R} r="2" fill={C.gold}/>
+      </svg>
+      <div style={{ ...T.label, fontSize: 8.5, color: C.textSub, marginTop: 6 }}>{city}</div>
+      <div style={{ ...T.num, fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+        {new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now)}
+      </div>
+    </div>
+  )
+}
+
+function ClockWidget() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(id) }, [])
+  return (
+    <Glass glow="rgba(150,140,255,0.10)" style={{ padding: 24 }}>
       <WLabel icon={<Clock size={13} strokeWidth={1.5}/>}>World Clock</WLabel>
-      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-        {CLOCKS.map(c => (
-          <div key={c.city} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span style={{ ...T.sm, color: C.textSub }}>{c.city}</span>
-            <span style={{ ...T.h3, color: C.text, fontVariantNumeric:'tabular-nums', letterSpacing:'0.02em' }}>{fmt(c.tz)}</span>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, justifyItems: 'center' }}>
+        {CLOCKS.map(c => <AnalogClock key={c.city} tz={c.tz} city={c.city} now={now}/>)}
       </div>
     </Glass>
   )
 }
+
+// ─── Reflections ──────────────────────────────────────────────────────────────
 
 function ReflectionsWidget() {
   const [items, setItems] = useState<Reflection[]>([])
   const [text, setText] = useState('')
-  const load = useCallback(async () => { const r=await fetch('/api/reflections'); setItems(await r.json()) }, [])
+  const load = useCallback(async () => { const r = await fetch('/api/reflections'); setItems(await r.json()) }, [])
   useEffect(() => { load() }, [load])
-  const save = async () => { if(!text.trim()) return; await fetch('/api/reflections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:text.trim()})}); setText(''); load() }
-  const del  = async (id:number) => { await fetch('/api/reflections',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); load() }
-
+  const save = async () => { if (!text.trim()) return; await fetch('/api/reflections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text.trim() }) }); setText(''); load() }
+  const del = async (id: number) => { await fetch('/api/reflections', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); load() }
   return (
-    <Glass style={{ padding:26, display:'flex', flexDirection:'column', gap:16 }}>
+    <Glass glow="rgba(255,200,120,0.08)" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <WLabel icon={<Feather size={13} strokeWidth={1.5}/>}>Stray Reflections</WLabel>
-      <div style={{ display:'flex', gap:8 }}>
-        <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="A thought, observation, or idea..." rows={2}
-          style={{ ...gIn, resize:'none', flex:1, lineHeight:1.65 }}
-          onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); save() } }}
-        />
-        <button onClick={save} style={{ background:'rgba(224,204,158,0.18)', border:`1px solid rgba(224,204,158,0.28)`, borderRadius:10, color:C.champagne, fontWeight:600, fontSize:16, padding:'0 18px', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}>
-          <ArrowUpRight size={16} strokeWidth={2}/>
-        </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="A thought, observation, or idea..." rows={2}
+          style={{ ...gIn, resize: 'none', flex: 1 }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() } }}/>
+        <button onClick={save} style={{ background: 'rgba(255,216,160,0.16)', border: '1px solid rgba(255,216,160,0.26)', borderRadius: 10, color: C.gold, padding: '0 16px', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center' }}><ArrowUpRight size={16}/></button>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:210, overflowY:'auto' }}>
-        {items.map((r,i) => (
-          <div key={r.id} style={{ background:'rgba(255,255,255,0.04)', borderRadius:14, padding:'14px 16px', borderLeft:'2px solid rgba(224,204,158,0.25)', position:'relative', animation:'fadeUp 0.3s ease both', animationDelay:`${i*0.04}s` }}>
-            <div style={{ ...T.body, color: C.textSub, lineHeight:1.65 }}>{r.content}</div>
-            <div style={{ ...T.sm, color: C.textMuted, marginTop:8 }}>{new Date(r.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
-            <button onClick={()=>del(r.id)} style={{ position:'absolute', top:10, right:10, background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex' }}><X size={12} strokeWidth={2}/></button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, maxHeight: 200, overflowY: 'auto' }}>
+        {items.map((r, i) => (
+          <div key={r.id} style={{ background: 'rgba(170,185,255,0.04)', borderRadius: 13, padding: '12px 15px', borderLeft: '2px solid rgba(255,216,160,0.30)', position: 'relative', animation: 'fadeUp 0.3s ease both', animationDelay: `${i * 0.04}s` }}>
+            <div style={{ ...T.body, color: C.textSub }}>{r.content}</div>
+            <div style={{ ...T.sm, fontSize: 10.5, color: C.textMuted, marginTop: 6 }}>{new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <button onClick={() => del(r.id)} style={{ position: 'absolute', top: 9, right: 9, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex' }}><X size={11}/></button>
           </div>
         ))}
-        {items.length===0 && <div style={{ ...T.sm, color:C.textMuted, textAlign:'center', padding:'18px 0' }}>No reflections yet</div>}
+        {items.length === 0 && <div style={{ ...T.sm, color: C.textMuted, textAlign: 'center', padding: '16px 0' }}>No reflections yet</div>}
       </div>
     </Glass>
   )
 }
 
-const CAT_C: Record<string,{border:string;bg:string;text:string}> = {
-  Clinical:       {border:'#7ac9a0',bg:'rgba(120,200,150,0.18)',text:'rgba(180,240,200,0.92)'},
-  Academic:       {border:'#7ab0e8',bg:'rgba(100,160,230,0.18)',text:'rgba(160,200,240,0.92)'},
-  Entrepreneurial:{border:'#b09adf',bg:'rgba(160,140,220,0.18)',text:'rgba(200,180,240,0.92)'},
-  Career:         {border:'#e8c070',bg:'rgba(220,180,80,0.18)', text:'rgba(240,210,140,0.92)'},
-}
-const STATUS_C: Record<string,{bg:string;text:string}> = {
-  'In progress':{bg:'rgba(120,200,150,0.18)',text:'rgba(180,240,200,0.92)'},
-  'Not started':{bg:'rgba(255,255,255,0.07)',text:'rgba(255,255,255,0.50)'},
-  'On hold':    {bg:'rgba(220,180,80,0.15)', text:'rgba(240,210,140,0.92)'},
-  'Complete':   {bg:'rgba(100,160,230,0.18)',text:'rgba(160,200,240,0.92)'},
-}
-const STATUSES = ['Not started','In progress','On hold','Complete']
+// ─── Project category styling ─────────────────────────────────────────────────
 
-function Chip({ label, bg, text }: { label:string;bg:string;text:string }) {
-  return <span style={{ ...T.label, fontSize:9, display:'inline-block', padding:'3px 10px', borderRadius:99, background:bg, color:text }}>{label}</span>
+const CAT_C: Record<string, { c: string; bg: string; text: string }> = {
+  Clinical:        { c: '#5ee8a8', bg: 'rgba(90,225,165,0.14)',  text: 'rgba(170,245,205,0.94)' },
+  Academic:        { c: '#6aa8ff', bg: 'rgba(100,165,255,0.14)', text: 'rgba(165,200,255,0.94)' },
+  Entrepreneurial: { c: '#b890ff', bg: 'rgba(180,145,255,0.14)', text: 'rgba(205,180,255,0.94)' },
+  Career:          { c: '#ffc465', bg: 'rgba(255,195,100,0.14)', text: 'rgba(255,215,150,0.94)' },
+}
+const STATUS_C: Record<string, { bg: string; text: string }> = {
+  'In progress': { bg: 'rgba(90,225,165,0.14)',  text: 'rgba(170,245,205,0.94)' },
+  'Not started': { bg: 'rgba(200,206,235,0.08)', text: 'rgba(200,206,235,0.52)' },
+  'On hold':     { bg: 'rgba(255,195,100,0.12)', text: 'rgba(255,215,150,0.94)' },
+  'Complete':    { bg: 'rgba(100,165,255,0.14)', text: 'rgba(165,200,255,0.94)' },
+}
+const STATUSES = ['Not started', 'In progress', 'On hold', 'Complete']
+
+function Chip({ label, bg, text }: { label: string; bg: string; text: string }) {
+  return <span style={{ ...T.label, fontSize: 8.5, display: 'inline-block', padding: '3px 10px', borderRadius: 99, background: bg, color: text }}>{label}</span>
 }
 
-function ProjectsWidget({ projects, onOpen }: { projects:Project[]; onOpen:()=>void }) {
-  const active = projects.filter(p=>p.status==='In progress')
+function glowCard(c: string, hov: boolean): React.CSSProperties {
+  return {
+    border: `1px solid ${c}${hov ? '70' : '40'}`,
+    boxShadow: hov
+      ? `0 0 0 1px ${c}30, 0 0 28px ${c}38, 0 0 60px ${c}18, 0 14px 40px rgba(0,0,10,0.5)`
+      : `0 0 0 1px ${c}18, 0 0 18px ${c}22, 0 8px 28px rgba(0,0,10,0.4)`,
+  }
+}
+
+// ─── Projects widget ──────────────────────────────────────────────────────────
+
+function ProjectsWidget({ projects, onOpen }: { projects: Project[]; onOpen: () => void }) {
+  const active = projects.filter(p => p.status === 'In progress')
   return (
-    <Glass style={{ padding:26 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18 }}>
+    <Glass glow="rgba(90,225,165,0.08)" style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <WLabel icon={<Layers size={13} strokeWidth={1.5}/>}>Projects</WLabel>
-        <button onClick={onOpen} style={{ background:'rgba(255,255,255,0.08)', border:`1px solid ${C.border}`, borderRadius:10, color:C.textSub, padding:'6px 16px', cursor:'pointer', ...T.sm, fontWeight:500, marginTop:-18, display:'flex', alignItems:'center', gap:6 }}>
-          All <ArrowUpRight size={11} strokeWidth={2}/>
-        </button>
+        <button onClick={onOpen} style={{ background: 'rgba(170,185,255,0.08)', border: `1px solid ${C.border}`, borderRadius: 10, color: C.textSub, padding: '6px 16px', cursor: 'pointer', ...T.sm, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>All <ArrowUpRight size={11}/></button>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
-        {[{label:'Total',val:projects.length},{label:'Active',val:active.length},{label:'Blockers',val:projects.filter(p=>p.block).length},{label:'Deadlines',val:projects.filter(p=>p.dl).length}].map(s => (
-          <div key={s.label} style={{ background:'rgba(255,255,255,0.05)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-            <div style={{ ...T.h1, color:C.text }}>{s.val}</div>
-            <div style={{ ...T.label, color:C.textMuted, marginTop:5, fontSize:9 }}>{s.label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
+        {[{ label: 'Total', val: projects.length }, { label: 'Active', val: active.length }, { label: 'Blockers', val: projects.filter(p => p.block).length }, { label: 'Deadlines', val: projects.filter(p => p.dl).length }].map(s => (
+          <div key={s.label} style={{ background: 'rgba(170,185,255,0.05)', borderRadius: 14, padding: '12px 8px', textAlign: 'center' }}>
+            <div style={{ ...T.h1, ...T.num, fontSize: 30, color: C.text }}>{s.val}</div>
+            <div style={{ ...T.label, color: C.textMuted, marginTop: 4, fontSize: 8.5 }}>{s.label}</div>
           </div>
         ))}
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {active.slice(0,4).map(p => {
-          const cc = CAT_C[p.cat]??CAT_C.Clinical
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {active.slice(0, 4).map(p => {
+          const cc = CAT_C[p.cat] ?? CAT_C.Clinical
+          const prog = p.phases.length ? (p.cp + 1) / p.phases.length : 0
           return (
-            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'rgba(255,255,255,0.04)', borderRadius:14, borderLeft:`3px solid ${cc.border}` }}>
-              <div style={{ flex:1 }}>
-                <div style={{ ...T.h3, color:C.text }}>{p.title}</div>
-                {p.next && <div style={{ ...T.sm, color:C.textMuted, marginTop:4 }}>{p.next}</div>}
+            <div key={p.id} style={{ padding: '12px 14px', background: 'rgba(8,10,26,0.55)', borderRadius: 14, ...glowCard(cc.c, false) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...T.h3, color: C.text }}>{p.title}</div>
+                  {p.next && <div style={{ ...T.sm, fontSize: 11, color: C.textMuted, marginTop: 3 }}>{p.next}</div>}
+                </div>
+                <Chip label={p.cat} bg={cc.bg} text={cc.text}/>
               </div>
-              <Chip label={p.cat} bg={cc.bg} text={cc.text}/>
+              <div style={{ marginTop: 9, height: 4, borderRadius: 99, background: 'rgba(170,185,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ width: `${prog * 100}%`, height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${cc.c}90, ${cc.c})`, boxShadow: `0 0 10px ${cc.c}90` }}/>
+              </div>
             </div>
           )
         })}
@@ -756,70 +660,65 @@ function ProjectsWidget({ projects, onOpen }: { projects:Project[]; onOpen:()=>v
   )
 }
 
+// ─── Health widget ────────────────────────────────────────────────────────────
+
 function HealthWidget() {
   const metrics = [
-    { icon:<Flame size={20} strokeWidth={1.3}/>, label:'Calories', unit:'kcal', c:'rgba(240,180,100,0.85)' },
-    { icon:<Activity size={20} strokeWidth={1.3}/>, label:'Heart Rate', unit:'bpm', c:'rgba(240,130,130,0.85)' },
-    { icon:<Activity size={20} strokeWidth={1.3}/>, label:'Steps', unit:'today', c:'rgba(140,210,160,0.85)' },
-    { icon:<Moon size={20} strokeWidth={1.3}/>, label:'Sleep', unit:'hrs', c:'rgba(170,160,220,0.85)' },
+    { icon: <Flame size={18} strokeWidth={1.3}/>, label: 'Calories', c: 'rgba(255,180,110,0.88)' },
+    { icon: <Activity size={18} strokeWidth={1.3}/>, label: 'Heart', c: 'rgba(255,140,150,0.88)' },
+    { icon: <Activity size={18} strokeWidth={1.3}/>, label: 'Steps', c: 'rgba(150,230,180,0.88)' },
+    { icon: <Moon size={18} strokeWidth={1.3}/>, label: 'Sleep', c: 'rgba(180,170,255,0.88)' },
   ]
   return (
-    <Glass style={{ padding:26 }}>
+    <Glass glow="rgba(255,120,140,0.07)" style={{ padding: 24 }}>
       <WLabel icon={<Heart size={13} strokeWidth={1.5}/>}>Health</WLabel>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {metrics.map(m => (
-          <div key={m.label} style={{ background:'rgba(255,255,255,0.05)', borderRadius:14, padding:'14px 12px', textAlign:'center' }}>
-            <div style={{ color:m.c, marginBottom:8, display:'flex', justifyContent:'center' }}>{m.icon}</div>
-            <div style={{ ...T.h2, color:m.c }}>—</div>
-            <div style={{ ...T.label, color:C.textMuted, marginTop:5, fontSize:9 }}>{m.label}</div>
+          <div key={m.label} style={{ background: 'rgba(170,185,255,0.05)', borderRadius: 13, padding: '13px 10px', textAlign: 'center' }}>
+            <div style={{ color: m.c, marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{m.icon}</div>
+            <div style={{ ...T.h2, color: m.c }}>—</div>
+            <div style={{ ...T.label, color: C.textMuted, marginTop: 4, fontSize: 8.5 }}>{m.label}</div>
           </div>
         ))}
       </div>
-      <div style={{ background:'rgba(255,255,255,0.04)', border:`1px solid rgba(255,255,255,0.09)`, borderRadius:14, padding:'14px 16px' }}>
-        <div style={{ ...T.sm, fontWeight:600, color:'rgba(240,160,140,0.82)', marginBottom:6 }}>Connect Apple Watch</div>
-        <div style={{ ...T.sm, color:C.textMuted, lineHeight:1.7 }}>Use iOS Shortcuts to POST HealthKit data to <code style={{ background:'rgba(255,255,255,0.08)', padding:'2px 6px', borderRadius:5, fontSize:11 }}>/api/health</code></div>
-      </div>
     </Glass>
   )
 }
 
-function FamilyWidget({ onOpen }: { onOpen: () => void }) {
-  return (
-    <Glass style={{ padding:26 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18 }}>
-        <WLabel icon={<Home size={13} strokeWidth={1.5}/>}>Family</WLabel>
-        <button onClick={onOpen} style={{ background:'rgba(255,255,255,0.08)', border:`1px solid ${C.border}`, borderRadius:10, color:C.textSub, padding:'6px 16px', cursor:'pointer', ...T.sm, fontWeight:500, marginTop:-18, display:'flex', alignItems:'center', gap:6 }}>
-          Open <ArrowUpRight size={11} strokeWidth={2}/>
-        </button>
-      </div>
-      {[{label:'Kids'},{label:'Wife'},{label:'Parents'}].map(s => (
-        <div key={s.label} style={{ display:'flex', alignItems:'center', gap:14, padding:'13px 14px', background:'rgba(255,255,255,0.04)', borderRadius:14, marginBottom:8 }}>
-          <div style={{ width:6, height:6, borderRadius:'50%', background:'rgba(224,204,158,0.55)', flexShrink:0 }}/>
-          <span style={{ ...T.body, color: C.textSub }}>{s.label}</span>
-        </div>
-      ))}
-    </Glass>
-  )
-}
+// ─── News (three categories) ──────────────────────────────────────────────────
+
+const NEWS_TABS: { key: keyof NewsData; label: string; icon: React.ReactNode; c: string }[] = [
+  { key: 'research', label: 'Latest Research', icon: <FlaskConical size={12} strokeWidth={1.5}/>, c: 'rgba(150,230,180,0.9)' },
+  { key: 'politics', label: 'Politics',         icon: <Landmark size={12} strokeWidth={1.5}/>,     c: 'rgba(165,200,255,0.9)' },
+  { key: 'finance',  label: 'Finance',          icon: <TrendingUp size={12} strokeWidth={1.5}/>,   c: 'rgba(255,215,150,0.9)' },
+]
 
 function NewsWidget() {
-  const [news, setNews] = useState<NewsItem[]>([])
-  const [loading, setLoading] = useState(true)
-  useEffect(() => { fetch('/api/news').then(r=>r.json()).then(d=>{setNews(d);setLoading(false)}) }, [])
+  const [news, setNews] = useState<NewsData | null>(null)
+  useEffect(() => { fetch('/api/news').then(r => r.json()).then(setNews) }, [])
   return (
-    <Glass style={{ padding:26 }}>
+    <Glass glow="rgba(255,165,90,0.06)" style={{ padding: 24 }}>
       <WLabel icon={<Newspaper size={13} strokeWidth={1.5}/>}>News · BBC</WLabel>
-      {loading && <div style={{ ...T.body, color:C.textMuted }}>Loading...</div>}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
-        {news.map((n,i) => (
-          <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
-            style={{ textDecoration:'none', display:'block', background:'rgba(255,255,255,0.04)', borderRadius:14, padding:'16px 18px', borderTop:`1px solid rgba(255,255,255,0.09)`, transition:'all 0.22s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,0.08)'; e.currentTarget.style.transform='translateY(-2px)'}}
-            onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,0.04)'; e.currentTarget.style.transform='translateY(0)'}}>
-            <div style={{ ...T.h3, color:C.text, marginBottom:8, lineHeight:1.45 }}>{n.title}</div>
-            <div style={{ ...T.sm, color:C.textMuted, lineHeight:1.6 }}>{n.description}</div>
-            {n.pubDate && <div style={{ ...T.label, color:C.textMuted, marginTop:10, fontSize:9 }}>{new Date(n.pubDate).toLocaleDateString('en-GB')}</div>}
-          </a>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+        {NEWS_TABS.map(tab => (
+          <div key={tab.key}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ color: tab.c, display: 'flex' }}>{tab.icon}</span>
+              <span style={{ ...T.label, fontSize: 9.5, color: tab.c }}>{tab.label}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {(news?.[tab.key] ?? []).map((n, i) => (
+                <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
+                  style={{ textDecoration: 'none', display: 'block', background: 'rgba(170,185,255,0.04)', borderRadius: 12, padding: '12px 14px', transition: 'all 0.22s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.09)'; e.currentTarget.style.transform = 'translateX(3px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.04)'; e.currentTarget.style.transform = 'translateX(0)' }}>
+                  <div style={{ ...T.sm, fontWeight: 550, color: C.text, lineHeight: 1.45 }}>{n.title}</div>
+                  {n.pubDate && <div style={{ ...T.label, fontSize: 8, color: C.textMuted, marginTop: 6 }}>{new Date(n.pubDate).toLocaleDateString('en-GB')}</div>}
+                </a>
+              ))}
+              {!news && <div style={{ ...T.sm, color: C.textMuted }}>Loading...</div>}
+            </div>
+          </div>
         ))}
       </div>
     </Glass>
@@ -828,18 +727,21 @@ function NewsWidget() {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-function Dashboard({ projects, setPage }: { projects:Project[]; setPage:(p:Page)=>void }) {
+function Dashboard({ projects, setPage }: { projects: Project[]; setPage: (p: Page) => void }) {
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 2fr', gap:18 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ marginBottom: 4 }}>
+        <h1 style={{ margin: 0, ...T.display, fontSize: 44, color: C.text }}>Command Centre</h1>
+        <div style={{ ...T.body, color: C.textMuted, marginTop: 6 }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.8fr', gap: 18 }}>
         <WeatherWidget/>
         <ClockWidget/>
         <ReflectionsWidget/>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr', gap: 18 }}>
         <ProjectsWidget projects={projects} onOpen={() => setPage('projects')}/>
         <HealthWidget/>
-        <FamilyWidget onOpen={() => setPage('family')}/>
       </div>
       <NewsWidget/>
     </div>
@@ -848,81 +750,84 @@ function Dashboard({ projects, setPage }: { projects:Project[]; setPage:(p:Page)
 
 // ─── Project modal ────────────────────────────────────────────────────────────
 
-function todayStr() { const d=new Date(); return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3)} ${d.getFullYear()}` }
+function todayStr() { const d = new Date(); return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getFullYear()}` }
 
-function ProjectModal({ project, onClose, onSave, onDelete }: { project:Project|null; onClose:()=>void; onSave:(p:Project)=>Promise<void>; onDelete:(id:number)=>Promise<void> }) {
-  const [form, setForm] = useState<Project|null>(null)
+function ProjectModal({ project, onClose, onSave, onDelete }: { project: Project | null; onClose: () => void; onSave: (p: Project) => Promise<void>; onDelete: (id: number) => Promise<void> }) {
+  const [form, setForm] = useState<Project | null>(null)
   const [newPhase, setNewPhase] = useState('')
   const [saving, setSaving] = useState(false)
-  useEffect(() => { setForm(project ? { ...project, phases:[...project.phases], log:[...project.log] } : null) }, [project])
+  useEffect(() => { setForm(project ? { ...project, notes: project.notes ?? '', phases: [...project.phases], log: [...project.log] } : null) }, [project])
   if (!form) return null
-  const set = (k: keyof Project, v: any) => setForm(f => f ? {...f,[k]:v} : f)
-  const addPhase = () => { if(!newPhase.trim()) return; set('phases',[...form.phases,newPhase.trim()]); setNewPhase('') }
-  const removePhase = (i:number) => { const p=form.phases.filter((_,j)=>j!==i); set('phases',p); if(form.cp>=p.length) set('cp',Math.max(0,p.length-1)) }
-  const movePhase = (i:number,dir:-1|1) => { const p=[...form.phases]; const j=i+dir; if(j<0||j>=p.length) return; [p[i],p[j]]=[p[j],p[i]]; set('phases',p) }
-  const handleSave = async () => { if(!form) return; setSaving(true); await onSave(form); setSaving(false); onClose() }
-  const handleDelete = async () => { if(!form||!confirm('Delete this project?')) return; await onDelete(form.id); onClose() }
-  const mIn: React.CSSProperties = { width:'100%', padding:'9px 12px', border:'1px solid #e4e4e7', borderRadius:9, fontSize:14, color:'#18181b', background:'#fafafa', boxSizing:'border-box' }
-  const F = ({ label, children }: { label:string; children:React.ReactNode }) => (
-    <div style={{ marginBottom:16 }}>
-      <label style={{ display:'block', fontSize:10, fontWeight:700, color:'#71717a', marginBottom:5, textTransform:'uppercase', letterSpacing:'0.1em' }}>{label}</label>
+  const set = (k: keyof Project, v: any) => setForm(f => f ? { ...f, [k]: v } : f)
+  const addPhase = () => { if (!newPhase.trim()) return; set('phases', [...form.phases, newPhase.trim()]); setNewPhase('') }
+  const removePhase = (i: number) => { const p = form.phases.filter((_, j) => j !== i); set('phases', p); if (form.cp >= p.length) set('cp', Math.max(0, p.length - 1)) }
+  const movePhase = (i: number, dir: -1 | 1) => { const p = [...form.phases]; const j = i + dir; if (j < 0 || j >= p.length) return; [p[i], p[j]] = [p[j], p[i]]; set('phases', p) }
+  const handleSave = async () => { if (!form) return; setSaving(true); await onSave(form); setSaving(false); onClose() }
+  const handleDelete = async () => { if (!form || !confirm('Delete this project?')) return; await onDelete(form.id); onClose() }
+  const mIn: React.CSSProperties = { width: '100%', padding: '9px 12px', border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 14, color: C.text, background: 'rgba(170,185,255,0.06)', boxSizing: 'border-box', outline: 'none' }
+  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div style={{ marginBottom: 15 }}>
+      <label style={{ display: 'block', ...T.label, fontSize: 9, color: C.textMuted, marginBottom: 5 }}>{label}</label>
       {children}
     </div>
   )
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.60)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:800, padding:16, backdropFilter:'blur(8px)' }} onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{ background:'#fff', borderRadius:22, width:'100%', maxWidth:620, maxHeight:'92vh', overflowY:'auto', padding:32 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
-          <h2 style={{ margin:0, fontSize:20, fontWeight:600, color:'#18181b' }}>{form.id?'Edit Project':'New Project'}</h2>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#71717a', display:'flex' }}><X size={20}/></button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,3,10,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 800, padding: 16, backdropFilter: 'blur(12px)' }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'rgba(12,14,34,0.94)', border: `1px solid ${C.borderHov}`, borderRadius: 24, width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto', padding: 32, boxShadow: '0 40px 120px rgba(0,0,10,0.7)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+          <h2 style={{ margin: 0, ...T.h2, color: C.text }}>{form.id ? 'Edit Project' : 'New Project'}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, display: 'flex' }}><X size={20}/></button>
         </div>
-        <F label="Title"><input value={form.title} onChange={e=>set('title',e.target.value)} style={mIn}/></F>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-          <F label="Category"><select value={form.cat} onChange={e=>set('cat',e.target.value)} style={mIn}>{['Clinical','Academic','Entrepreneurial','Career'].map(c=><option key={c}>{c}</option>)}</select></F>
-          <F label="Status"><select value={form.status} onChange={e=>set('status',e.target.value)} style={mIn}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></F>
+        <F label="Title"><input value={form.title} onChange={e => set('title', e.target.value)} style={mIn}/></F>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <F label="Category"><select value={form.cat} onChange={e => set('cat', e.target.value)} style={{ ...mIn, background: 'rgba(12,14,34,1)' }}>{['Clinical', 'Academic', 'Entrepreneurial', 'Career'].map(c => <option key={c}>{c}</option>)}</select></F>
+          <F label="Status"><select value={form.status} onChange={e => set('status', e.target.value)} style={{ ...mIn, background: 'rgba(12,14,34,1)' }}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select></F>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-          <F label="Deadline"><input value={form.dl} onChange={e=>set('dl',e.target.value)} style={mIn} placeholder="e.g. 30 Sep 2026"/></F>
-          <F label="Assigned to"><input value={form.who} onChange={e=>set('who',e.target.value)} style={mIn}/></F>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <F label="Deadline"><input value={form.dl} onChange={e => set('dl', e.target.value)} style={mIn} placeholder="e.g. 30 Sep 2026"/></F>
+          <F label="Assigned to"><input value={form.who} onChange={e => set('who', e.target.value)} style={mIn}/></F>
         </div>
-        <F label="Next step"><input value={form.next} onChange={e=>set('next',e.target.value)} style={mIn}/></F>
-        <F label="Last action (auto-logs)"><input value={form.last} onChange={e=>set('last',e.target.value)} style={mIn}/></F>
-        <F label="Blocker"><input value={form.block} onChange={e=>set('block',e.target.value)} style={mIn}/></F>
+        <F label="Next step"><input value={form.next} onChange={e => set('next', e.target.value)} style={mIn}/></F>
+        <F label="Last action (auto-logs)"><input value={form.last} onChange={e => set('last', e.target.value)} style={mIn}/></F>
+        <F label="Blocker"><input value={form.block} onChange={e => set('block', e.target.value)} style={mIn}/></F>
+        <F label="Notes / Thought process">
+          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={5} placeholder="Write your thinking, plan, ideas..." style={{ ...mIn, resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit' }}/>
+        </F>
         <F label="Phases">
-          <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            {form.phases.map((p,i)=>(
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:7 }}>
-                <span style={{ flex:1, fontSize:13, color:'#3f3f46' }}>{p}</span>
-                <button onClick={()=>movePhase(i,-1)} style={{ background:'none', border:'1px solid #e4e4e7', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:11, color:'#71717a' }}>↑</button>
-                <button onClick={()=>movePhase(i,1)}  style={{ background:'none', border:'1px solid #e4e4e7', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:11, color:'#71717a' }}>↓</button>
-                <button onClick={()=>removePhase(i)}  style={{ background:'none', border:'1px solid #e4e4e7', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:11, color:'#ef4444', display:'flex' }}><X size={11}/></button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {form.phases.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ flex: 1, fontSize: 13, color: C.textSub }}>{p}</span>
+                <button onClick={() => movePhase(i, -1)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: C.textMuted }}>↑</button>
+                <button onClick={() => movePhase(i, 1)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: C.textMuted }}>↓</button>
+                <button onClick={() => removePhase(i)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: 'rgba(255,130,130,0.8)', display: 'flex' }}><X size={11}/></button>
               </div>
             ))}
-            <div style={{ display:'flex', gap:7, marginTop:5 }}>
-              <input value={newPhase} onChange={e=>setNewPhase(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPhase()} placeholder="Add phase..." style={{ ...mIn, flex:1 }}/>
-              <button onClick={addPhase} style={{ background:'#f4f4f5', border:'1px solid #e4e4e7', borderRadius:8, padding:'7px 16px', cursor:'pointer', fontSize:13, color:'#3f3f46' }}>Add</button>
+            <div style={{ display: 'flex', gap: 7, marginTop: 5 }}>
+              <input value={newPhase} onChange={e => setNewPhase(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPhase()} placeholder="Add phase..." style={{ ...mIn, flex: 1 }}/>
+              <button onClick={addPhase} style={{ background: 'rgba(170,185,255,0.10)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 16px', cursor: 'pointer', fontSize: 13, color: C.textSub }}>Add</button>
             </div>
           </div>
         </F>
-        <F label={`Phase ${form.cp+1} of ${form.phases.length||1}: ${form.phases[form.cp]??'–'}`}>
-          <input type="range" min={0} max={Math.max(0,form.phases.length-1)} value={form.cp} onChange={e=>set('cp',Number(e.target.value))} style={{ width:'100%' }}/>
+        <F label={`Phase ${form.cp + 1} of ${form.phases.length || 1}: ${form.phases[form.cp] ?? '–'}`}>
+          <input type="range" min={0} max={Math.max(0, form.phases.length - 1)} value={form.cp} onChange={e => set('cp', Number(e.target.value))} style={{ width: '100%', accentColor: '#ffd8a0' }}/>
         </F>
-        {form.log.length>0 && (
+        {form.log.length > 0 && (
           <F label="Activity log">
-            <div style={{ maxHeight:110, overflowY:'auto', display:'flex', flexDirection:'column', gap:5 }}>
-              {[...form.log].reverse().map((e,i)=>(
-                <div key={i} style={{ fontSize:12, color:'#52525b', borderLeft:'2px solid #e4e4e7', paddingLeft:9 }}>
-                  <span style={{ fontWeight:600 }}>{e.d}</span> — {e.n}
+            <div style={{ maxHeight: 110, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {[...form.log].reverse().map((e, i) => (
+                <div key={i} style={{ fontSize: 12, color: C.textSub, borderLeft: `2px solid ${C.border}`, paddingLeft: 9 }}>
+                  <span style={{ fontWeight: 600, color: C.gold }}>{e.d}</span> — {e.n}
                 </div>
               ))}
             </div>
           </F>
         )}
-        <div style={{ display:'flex', justifyContent:'space-between', marginTop:22 }}>
-          {form.id ? <button onClick={handleDelete} style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:9, padding:'9px 18px', cursor:'pointer', fontWeight:600, fontSize:14 }}>Delete</button> : <div/>}
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={onClose} style={{ background:'#f4f4f5', border:'none', borderRadius:9, padding:'9px 18px', cursor:'pointer', fontSize:14, color:'#52525b' }}>Cancel</button>
-            <button onClick={handleSave} disabled={saving} style={{ background:'#059669', color:'#fff', border:'none', borderRadius:9, padding:'9px 22px', cursor:'pointer', fontWeight:600, fontSize:14, opacity:saving?0.7:1 }}>{saving?'Saving...':'Save'}</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 22 }}>
+          {form.id ? <button onClick={handleDelete} style={{ background: 'rgba(255,90,90,0.10)', color: 'rgba(255,150,150,0.9)', border: '1px solid rgba(255,90,90,0.25)', borderRadius: 9, padding: '9px 18px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Delete</button> : <div/>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onClose} style={{ background: 'rgba(170,185,255,0.08)', border: 'none', borderRadius: 9, padding: '9px 18px', cursor: 'pointer', fontSize: 14, color: C.textSub }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving} style={{ background: 'rgba(255,216,160,0.88)', color: '#1a1206', border: 'none', borderRadius: 9, padding: '9px 22px', cursor: 'pointer', fontWeight: 650, fontSize: 14, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
           </div>
         </div>
       </div>
@@ -930,125 +835,130 @@ function ProjectModal({ project, onClose, onSave, onDelete }: { project:Project|
   )
 }
 
-function ProjectsPage({ projects, reload }: { projects:Project[]; reload:()=>Promise<void> }) {
-  const [cat, setCat] = useState('All')
-  const [view, setView] = useState<'board'|'list'>('board')
-  const [selected, setSelected] = useState<Project|null>(null)
-  const filtered = projects.filter(p=>cat==='All'||p.cat===cat)
-  const CATS = ['All','Clinical','Academic','Entrepreneurial','Career']
+// ─── Projects page ────────────────────────────────────────────────────────────
 
-  const handleSave = async (form:Project) => {
-    const prevLast = projects.find(p=>p.id===form.id)?.last??''
-    const log = form.last && form.last!==prevLast ? [...form.log,{d:todayStr(),n:form.last}] : form.log
-    const payload = { ...form, log }
-    if (form.id) { await fetch('/api/projects',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}) }
-    else { const {id:_,...body}=payload; await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}) }
-    await reload()
-  }
-  const handleDelete = async (id:number) => { await fetch('/api/projects',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); await reload() }
-
+function ProjectCard({ p, onClick }: { p: Project; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  const cc = CAT_C[p.cat] ?? CAT_C.Clinical
+  const prog = p.phases.length ? (p.cp + 1) / p.phases.length : 0
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
-        <h1 style={{ margin:0, ...T.h1, color:C.text }}>Projects</h1>
-        <button onClick={()=>setSelected({id:0,title:'',cat:'Clinical',status:'Not started',phases:[],cp:0,next:'',last:'',dl:'',who:'',block:'',log:[]})}
-          style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(0,0,0,0.30)', backdropFilter:'blur(20px)', border:`1px solid ${C.border}`, borderRadius:14, color:C.text, ...T.body, fontWeight:500, padding:'10px 22px', cursor:'pointer' }}>
-          <Plus size={14} strokeWidth={2}/>New project
-        </button>
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ background: 'rgba(8,10,26,0.62)', backdropFilter: 'blur(22px)', borderRadius: 16, padding: '14px 16px', marginBottom: 10, cursor: 'pointer', transition: 'all 0.25s', transform: hov ? 'translateY(-3px)' : 'none', ...glowCard(cc.c, hov) }}>
+      <div style={{ ...T.h3, color: C.text, marginBottom: 4 }}>{p.title}</div>
+      {p.next && <div style={{ ...T.sm, fontSize: 11.5, color: C.textMuted, fontStyle: 'italic' }}>{p.next}</div>}
+      <div style={{ marginTop: 10, height: 4, borderRadius: 99, background: 'rgba(170,185,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ width: `${prog * 100}%`, height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${cc.c}90, ${cc.c})`, boxShadow: `0 0 10px ${cc.c}90` }}/>
       </div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', gap:7 }}>
-          {CATS.map(c=>(
-            <button key={c} onClick={()=>setCat(c)} style={{ padding:'7px 18px', borderRadius:22, border:'none', cursor:'pointer', ...T.sm, fontWeight:600, background:cat===c?'rgba(255,255,255,0.16)':'rgba(0,0,0,0.28)', color:cat===c?C.text:C.textMuted, backdropFilter:'blur(20px)' }}>{c}</button>
-          ))}
-        </div>
-        <div style={{ display:'flex', gap:4, background:'rgba(0,0,0,0.28)', borderRadius:12, padding:4, backdropFilter:'blur(20px)' }}>
-          {(['board','list'] as const).map(v=>(
-            <button key={v} onClick={()=>setView(v)} style={{ padding:'6px 18px', borderRadius:9, border:'none', cursor:'pointer', ...T.sm, fontWeight:600, textTransform:'capitalize', background:view===v?'rgba(255,255,255,0.14)':'transparent', color:view===v?C.text:C.textMuted }}>{v}</button>
-          ))}
-        </div>
-      </div>
-      {view==='board' && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, alignItems:'start' }}>
-          {STATUSES.map(s=>{
-            const sc=STATUS_C[s]; const items=filtered.filter(p=>p.status===s)
-            return (
-              <div key={s}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-                  <Chip label={s} bg={sc.bg} text={sc.text}/>
-                  <span style={{ ...T.label, color:C.textMuted, fontSize:9 }}>{items.length}</span>
-                </div>
-                {items.map(p=>{
-                  const cc=CAT_C[p.cat]??CAT_C.Clinical
-                  return (
-                    <div key={p.id} onClick={()=>setSelected(p)}
-                      style={{ background:'rgba(0,0,0,0.25)', backdropFilter:'blur(24px)', borderRadius:16, padding:'14px 16px', borderLeft:`3px solid ${cc.border}`, marginBottom:10, cursor:'pointer', transition:'all 0.2s', border:`1px solid rgba(255,255,255,0.08)`, borderLeftColor:cc.border, borderLeftWidth:3 }}
-                      onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,0,0,0.38)'; e.currentTarget.style.transform='translateY(-2px)'}}
-                      onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,0,0,0.25)'; e.currentTarget.style.transform='translateY(0)'}}>
-                      <div style={{ ...T.h3, color:C.text, marginBottom:5 }}>{p.title}</div>
-                      {p.next&&<div style={{ ...T.sm, color:C.textMuted, fontStyle:'italic' }}>{p.next}</div>}
-                      {p.dl&&<div style={{ ...T.sm, color:C.textMuted, marginTop:8, display:'flex', alignItems:'center', gap:5 }}><Calendar size={10} strokeWidth={1.5}/>{p.dl}</div>}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {view==='list' && (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {filtered.map(p=>{
-            const cc=CAT_C[p.cat]??CAT_C.Clinical; const sc=STATUS_C[p.status]??STATUS_C['Not started']
-            return (
-              <div key={p.id} onClick={()=>setSelected(p)}
-                style={{ background:'rgba(0,0,0,0.25)', backdropFilter:'blur(24px)', borderRadius:16, padding:'15px 20px', borderLeft:`3px solid ${cc.border}`, cursor:'pointer', display:'flex', alignItems:'center', gap:14, transition:'all 0.2s', border:`1px solid rgba(255,255,255,0.08)`, borderLeftColor:cc.border, borderLeftWidth:3 }}
-                onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,0,0,0.38)'; e.currentTarget.style.transform='translateY(-1px)'}}
-                onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,0,0,0.25)'; e.currentTarget.style.transform='translateY(0)'}}>
-                <div style={{ flex:1 }}>
-                  <div style={{ ...T.h3, color:C.text }}>{p.title}</div>
-                  {p.next&&<div style={{ ...T.sm, color:C.textMuted, marginTop:3 }}>{p.next}</div>}
-                </div>
-                <Chip label={p.cat} bg={cc.bg} text={cc.text}/>
-                <Chip label={p.status} bg={sc.bg} text={sc.text}/>
-                {p.dl&&<span style={{ ...T.sm, color:C.textMuted, display:'flex', alignItems:'center', gap:5, whiteSpace:'nowrap' }}><Calendar size={10} strokeWidth={1.5}/>{p.dl}</span>}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {selected && <ProjectModal project={selected} onClose={()=>setSelected(null)} onSave={handleSave} onDelete={handleDelete}/>}
+      {p.dl && <div style={{ ...T.sm, fontSize: 10.5, color: C.textMuted, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={10}/>{p.dl}</div>}
     </div>
   )
 }
 
-// ─── Health / Family / Friends pages ─────────────────────────────────────────
+function ProjectsPage({ projects, reload }: { projects: Project[]; reload: () => Promise<void> }) {
+  const [cat, setCat] = useState('All')
+  const [view, setView] = useState<'board' | 'list'>('board')
+  const [selected, setSelected] = useState<Project | null>(null)
+  const filtered = projects.filter(p => cat === 'All' || p.cat === cat)
+  const CATS = ['All', 'Clinical', 'Academic', 'Entrepreneurial', 'Career']
+  const handleSave = async (form: Project) => {
+    const prevLast = projects.find(p => p.id === form.id)?.last ?? ''
+    const log = form.last && form.last !== prevLast ? [...form.log, { d: todayStr(), n: form.last }] : form.log
+    const payload = { ...form, log }
+    if (form.id) { await fetch('/api/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }) }
+    else { const { id: _, ...body } = payload; await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
+    await reload()
+  }
+  const handleDelete = async (id: number) => { await fetch('/api/projects', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); await reload() }
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+        <h1 style={{ margin: 0, ...T.h1, color: C.text }}>Projects</h1>
+        <button onClick={() => setSelected({ id: 0, title: '', cat: 'Clinical', status: 'Not started', phases: [], cp: 0, next: '', last: '', dl: '', who: '', block: '', notes: '', log: [] })}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,216,160,0.14)', border: '1px solid rgba(255,216,160,0.28)', borderRadius: 14, color: C.gold, ...T.body, fontWeight: 550, padding: '10px 22px', cursor: 'pointer' }}>
+          <Plus size={14}/>New project
+        </button>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 7 }}>
+          {CATS.map(c => (
+            <button key={c} onClick={() => setCat(c)} style={{ padding: '7px 18px', borderRadius: 22, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, background: cat === c ? 'rgba(170,185,255,0.18)' : 'rgba(12,14,34,0.55)', color: cat === c ? C.text : C.textMuted, backdropFilter: 'blur(20px)' }}>{c}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 4, background: 'rgba(12,14,34,0.55)', borderRadius: 12, padding: 4, backdropFilter: 'blur(20px)' }}>
+          {(['board', 'list'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} style={{ padding: '6px 18px', borderRadius: 9, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, textTransform: 'capitalize', background: view === v ? 'rgba(170,185,255,0.15)' : 'transparent', color: view === v ? C.text : C.textMuted }}>{v}</button>
+          ))}
+        </div>
+      </div>
+      {view === 'board' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, alignItems: 'start' }}>
+          {STATUSES.map(s => {
+            const sc = STATUS_C[s]; const items = filtered.filter(p => p.status === s)
+            return (
+              <div key={s}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Chip label={s} bg={sc.bg} text={sc.text}/>
+                  <span style={{ ...T.label, color: C.textMuted, fontSize: 9 }}>{items.length}</span>
+                </div>
+                {items.map(p => <ProjectCard key={p.id} p={p} onClick={() => setSelected(p)}/>)}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {view === 'list' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filtered.map(p => {
+            const cc = CAT_C[p.cat] ?? CAT_C.Clinical; const sc = STATUS_C[p.status] ?? STATUS_C['Not started']
+            return (
+              <div key={p.id} onClick={() => setSelected(p)}
+                style={{ background: 'rgba(8,10,26,0.62)', backdropFilter: 'blur(22px)', borderRadius: 16, padding: '15px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, transition: 'all 0.25s', ...glowCard(cc.c, false) }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; Object.assign(e.currentTarget.style, glowCard(cc.c, true)) }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; Object.assign(e.currentTarget.style, glowCard(cc.c, false)) }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...T.h3, color: C.text }}>{p.title}</div>
+                  {p.next && <div style={{ ...T.sm, color: C.textMuted, marginTop: 3 }}>{p.next}</div>}
+                </div>
+                <Chip label={p.cat} bg={cc.bg} text={cc.text}/>
+                <Chip label={p.status} bg={sc.bg} text={sc.text}/>
+                {p.dl && <span style={{ ...T.sm, color: C.textMuted, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}><Calendar size={10}/>{p.dl}</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {selected && <ProjectModal project={selected} onClose={() => setSelected(null)} onSave={handleSave} onDelete={handleDelete}/>}
+    </div>
+  )
+}
+
+// ─── Health page ──────────────────────────────────────────────────────────────
 
 function HealthPage() {
   return (
     <div>
-      <h1 style={{ margin:'0 0 26px', ...T.h1, color:C.text }}>Health</h1>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:20 }}>
+      <h1 style={{ margin: '0 0 26px', ...T.h1, color: C.text }}>Health</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 20 }}>
         {[
-          {icon:<Flame size={28} strokeWidth={1.2}/>,label:'Active Calories',unit:'kcal',c:'rgba(240,180,100,0.88)'},
-          {icon:<Activity size={28} strokeWidth={1.2}/>,label:'Heart Rate',unit:'bpm',c:'rgba(240,130,130,0.88)'},
-          {icon:<Activity size={28} strokeWidth={1.2}/>,label:'Steps',unit:'today',c:'rgba(140,210,160,0.88)'},
-          {icon:<Moon size={28} strokeWidth={1.2}/>,label:'Sleep',unit:'hrs',c:'rgba(170,160,220,0.88)'},
-        ].map(m=>(
-          <Glass key={m.label} style={{ padding:24, textAlign:'center' }}>
-            <div style={{ color:m.c, marginBottom:10, display:'flex', justifyContent:'center' }}>{m.icon}</div>
-            <div style={{ ...T.h1, color:m.c, fontSize:38, fontWeight:200 }}>—</div>
-            <div style={{ ...T.label, color:C.textMuted, marginTop:8, fontSize:9 }}>{m.label}</div>
+          { icon: <Flame size={28} strokeWidth={1.2}/>, label: 'Active Calories', c: 'rgba(255,180,110,0.88)' },
+          { icon: <Activity size={28} strokeWidth={1.2}/>, label: 'Heart Rate', c: 'rgba(255,140,150,0.88)' },
+          { icon: <Activity size={28} strokeWidth={1.2}/>, label: 'Steps', c: 'rgba(150,230,180,0.88)' },
+          { icon: <Moon size={28} strokeWidth={1.2}/>, label: 'Sleep', c: 'rgba(180,170,255,0.88)' },
+        ].map(m => (
+          <Glass key={m.label} style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ color: m.c, marginBottom: 10, display: 'flex', justifyContent: 'center' }}>{m.icon}</div>
+            <div style={{ ...T.h1, color: m.c, fontSize: 38 }}>—</div>
+            <div style={{ ...T.label, color: C.textMuted, marginTop: 8, fontSize: 9 }}>{m.label}</div>
           </Glass>
         ))}
       </div>
-      <Glass style={{ padding:26 }}>
-        <div style={{ ...T.h3, color:'rgba(240,160,140,0.88)', marginBottom:14 }}>Connect Apple Watch</div>
-        <div style={{ ...T.body, color:C.textSub, lineHeight:1.8 }}>
+      <Glass style={{ padding: 26 }}>
+        <div style={{ ...T.h3, color: 'rgba(255,160,150,0.9)', marginBottom: 14 }}>Connect Apple Watch</div>
+        <div style={{ ...T.body, color: C.textSub, lineHeight: 1.8 }}>
           HealthKit cannot be read directly by a web app. To pipe your metrics here:<br/>
-          1. Create an <strong style={{color:C.text}}>Apple Shortcut</strong> that runs on unlock or daily.<br/>
+          1. Create an <strong style={{ color: C.text }}>Apple Shortcut</strong> that runs on unlock or daily.<br/>
           2. Use "Get Health Samples" to read Calories, Heart Rate, Steps, Sleep.<br/>
-          3. POST the JSON to <code style={{ background:'rgba(255,255,255,0.10)', padding:'2px 8px', borderRadius:5, fontSize:12 }}>/api/health</code>.<br/>
+          3. POST the JSON to <code style={{ background: 'rgba(170,185,255,0.10)', padding: '2px 8px', borderRadius: 5, fontSize: 12 }}>/api/health</code>.<br/>
           4. The metrics above populate automatically once connected.
         </div>
       </Glass>
@@ -1056,40 +966,42 @@ function HealthPage() {
   )
 }
 
-function FamilyPage({ sub, setSub }: { sub:string; setSub:(s:string)=>void }) {
+// ─── Family / Friends pages ───────────────────────────────────────────────────
+
+function FamilyPage({ sub, setSub }: { sub: string; setSub: (s: string) => void }) {
   const [notes, setNotes] = useState<FamilyNote[]>([])
   const [text, setText] = useState('')
-  const load = useCallback(async () => { const r=await fetch('/api/family'); setNotes(await r.json()) }, [])
+  const load = useCallback(async () => { const r = await fetch('/api/family'); setNotes(await r.json()) }, [])
   useEffect(() => { load() }, [load])
-  const subs = [{id:'kids',label:'Kids'},{id:'wife',label:'Wife'},{id:'parents',label:'Parents'}]
-  const cur = subs.find(s=>s.id===sub)
-  const mn = notes.filter(n=>n.member===sub)
-  const add = async () => { if(!text.trim()) return; await fetch('/api/family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({member:sub,content:text.trim()})}); setText(''); load() }
-  const del = async (id:number) => { await fetch('/api/family',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); load() }
+  const subs = [{ id: 'kids', label: 'Kids' }, { id: 'wife', label: 'Wife' }, { id: 'parents', label: 'Parents' }]
+  const cur = subs.find(s => s.id === sub)
+  const mn = notes.filter(n => n.member === sub)
+  const add = async () => { if (!text.trim()) return; await fetch('/api/family', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ member: sub, content: text.trim() }) }); setText(''); load() }
+  const del = async (id: number) => { await fetch('/api/family', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); load() }
   return (
     <div>
-      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:26 }}>
-        <h1 style={{ margin:0, ...T.h1, color:C.text }}>Family</h1>
-        <div style={{ display:'flex', gap:7 }}>
-          {subs.map(s=>(
-            <button key={s.id} onClick={()=>setSub(s.id)} style={{ padding:'7px 20px', borderRadius:22, border:'none', cursor:'pointer', ...T.sm, fontWeight:600, background:sub===s.id?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.28)', color:sub===s.id?C.text:C.textMuted, backdropFilter:'blur(20px)' }}>{s.label}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 26 }}>
+        <h1 style={{ margin: 0, ...T.h1, color: C.text }}>Family</h1>
+        <div style={{ display: 'flex', gap: 7 }}>
+          {subs.map(s => (
+            <button key={s.id} onClick={() => setSub(s.id)} style={{ padding: '7px 20px', borderRadius: 22, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, background: sub === s.id ? 'rgba(170,185,255,0.16)' : 'rgba(12,14,34,0.55)', color: sub === s.id ? C.text : C.textMuted, backdropFilter: 'blur(20px)' }}>{s.label}</button>
           ))}
         </div>
       </div>
-      <Glass style={{ padding:26 }}>
-        <div style={{ display:'flex', gap:10, marginBottom:22 }}>
-          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={`Add a note about ${cur?.label}...`} rows={2} style={{ ...gIn, flex:1, resize:'none', lineHeight:1.65 }} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();add()}}}/>
-          <button onClick={add} style={{ background:'rgba(255,255,255,0.12)', border:`1px solid ${C.border}`, borderRadius:12, color:C.text, ...T.body, fontWeight:500, padding:'0 22px', cursor:'pointer' }}>Add</button>
+      <Glass style={{ padding: 26 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
+          <textarea value={text} onChange={e => setText(e.target.value)} placeholder={`Add a note about ${cur?.label}...`} rows={2} style={{ ...gIn, flex: 1, resize: 'none' }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add() } }}/>
+          <button onClick={add} style={{ background: 'rgba(170,185,255,0.12)', border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, ...T.body, fontWeight: 500, padding: '0 22px', cursor: 'pointer' }}>Add</button>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {mn.map(n=>(
-            <div key={n.id} style={{ background:'rgba(255,255,255,0.04)', borderRadius:14, padding:'15px 18px', borderLeft:'2px solid rgba(255,255,255,0.12)', position:'relative' }}>
-              <div style={{ ...T.body, color:C.textSub, lineHeight:1.65 }}>{n.content}</div>
-              <div style={{ ...T.label, color:C.textMuted, marginTop:8, fontSize:9 }}>{new Date(n.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
-              <button onClick={()=>del(n.id)} style={{ position:'absolute', top:12, right:12, background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex' }}><X size={12}/></button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {mn.map(n => (
+            <div key={n.id} style={{ background: 'rgba(170,185,255,0.04)', borderRadius: 14, padding: '15px 18px', borderLeft: '2px solid rgba(255,216,160,0.25)', position: 'relative' }}>
+              <div style={{ ...T.body, color: C.textSub }}>{n.content}</div>
+              <div style={{ ...T.label, color: C.textMuted, marginTop: 8, fontSize: 8.5 }}>{new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+              <button onClick={() => del(n.id)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex' }}><X size={12}/></button>
             </div>
           ))}
-          {mn.length===0 && <div style={{ ...T.body, color:C.textMuted, textAlign:'center', padding:'26px 0' }}>No notes for {cur?.label} yet</div>}
+          {mn.length === 0 && <div style={{ ...T.body, color: C.textMuted, textAlign: 'center', padding: '26px 0' }}>No notes for {cur?.label} yet</div>}
         </div>
       </Glass>
     </div>
@@ -1101,40 +1013,99 @@ function FriendsPage() {
   const [name, setName] = useState('')
   const [text, setText] = useState('')
   const [filter, setFilter] = useState('')
-  const load = useCallback(async () => { const r=await fetch('/api/friends'); setNotes(await r.json()) }, [])
+  const load = useCallback(async () => { const r = await fetch('/api/friends'); setNotes(await r.json()) }, [])
   useEffect(() => { load() }, [load])
-  const names = Array.from(new Set(notes.map(n=>n.name)))
-  const add = async () => { if(!name.trim()||!text.trim()) return; await fetch('/api/friends',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim(),content:text.trim()})}); setText(''); load() }
-  const del = async (id:number) => { await fetch('/api/friends',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); load() }
-  const filtered = notes.filter(n=>!filter||n.name===filter)
+  const names = Array.from(new Set(notes.map(n => n.name)))
+  const add = async () => { if (!name.trim() || !text.trim()) return; await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), content: text.trim() }) }); setText(''); load() }
+  const del = async (id: number) => { await fetch('/api/friends', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); load() }
+  const filtered = notes.filter(n => !filter || n.name === filter)
   return (
     <div>
-      <h1 style={{ margin:'0 0 26px', ...T.h1, color:C.text }}>Friends</h1>
-      <Glass style={{ padding:26, marginBottom:18 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr auto', gap:10, marginBottom:names.length?18:0 }}>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Name" style={gIn}/>
-          <input value={text} onChange={e=>setText(e.target.value)} placeholder="Note..." style={gIn} onKeyDown={e=>e.key==='Enter'&&add()}/>
-          <button onClick={add} style={{ background:'rgba(255,255,255,0.12)', border:`1px solid ${C.border}`, borderRadius:12, color:C.text, ...T.body, fontWeight:500, padding:'0 24px', cursor:'pointer' }}>Add</button>
+      <h1 style={{ margin: '0 0 26px', ...T.h1, color: C.text }}>Friends</h1>
+      <Glass style={{ padding: 26, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 10, marginBottom: names.length ? 18 : 0 }}>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" style={gIn}/>
+          <input value={text} onChange={e => setText(e.target.value)} placeholder="Note..." style={gIn} onKeyDown={e => e.key === 'Enter' && add()}/>
+          <button onClick={add} style={{ background: 'rgba(170,185,255,0.12)', border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, ...T.body, fontWeight: 500, padding: '0 24px', cursor: 'pointer' }}>Add</button>
         </div>
-        {names.length>0 && (
-          <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
-            <button onClick={()=>setFilter('')} style={{ padding:'5px 16px', borderRadius:16, border:'none', cursor:'pointer', ...T.sm, fontWeight:600, background:filter===''?'rgba(255,255,255,0.15)':'rgba(255,255,255,0.07)', color:filter===''?C.text:C.textMuted }}> All</button>
-            {names.map(n=>(
-              <button key={n} onClick={()=>setFilter(n)} style={{ padding:'5px 16px', borderRadius:16, border:'none', cursor:'pointer', ...T.sm, fontWeight:600, background:filter===n?'rgba(255,255,255,0.15)':'rgba(255,255,255,0.07)', color:filter===n?C.text:C.textMuted }}>{n}</button>
+        {names.length > 0 && (
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <button onClick={() => setFilter('')} style={{ padding: '5px 16px', borderRadius: 16, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, background: filter === '' ? 'rgba(170,185,255,0.16)' : 'rgba(170,185,255,0.06)', color: filter === '' ? C.text : C.textMuted }}>All</button>
+            {names.map(n => (
+              <button key={n} onClick={() => setFilter(n)} style={{ padding: '5px 16px', borderRadius: 16, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, background: filter === n ? 'rgba(170,185,255,0.16)' : 'rgba(170,185,255,0.06)', color: filter === n ? C.text : C.textMuted }}>{n}</button>
             ))}
           </div>
         )}
       </Glass>
-      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {filtered.map(n=>(
-          <Glass key={n.id} style={{ padding:'16px 20px', position:'relative' }}>
-            <div style={{ ...T.label, color:C.champagne, marginBottom:6, fontSize:9 }}>{n.name}</div>
-            <div style={{ ...T.body, color:C.textSub, lineHeight:1.65 }}>{n.content}</div>
-            <div style={{ ...T.label, color:C.textMuted, marginTop:8, fontSize:9 }}>{new Date(n.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
-            <button onClick={()=>del(n.id)} style={{ position:'absolute', top:14, right:14, background:'none', border:'none', color:C.textMuted, cursor:'pointer', display:'flex' }}><X size={12}/></button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filtered.map(n => (
+          <Glass key={n.id} style={{ padding: '16px 20px', position: 'relative' }}>
+            <div style={{ ...T.label, color: C.gold, marginBottom: 6, fontSize: 9 }}>{n.name}</div>
+            <div style={{ ...T.body, color: C.textSub }}>{n.content}</div>
+            <div style={{ ...T.label, color: C.textMuted, marginTop: 8, fontSize: 8.5 }}>{new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <button onClick={() => del(n.id)} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex' }}><X size={12}/></button>
           </Glass>
         ))}
-        {filtered.length===0 && <div style={{ ...T.body, color:C.textMuted, textAlign:'center', padding:'32px 0' }}>No entries yet</div>}
+        {filtered.length === 0 && <div style={{ ...T.body, color: C.textMuted, textAlign: 'center', padding: '32px 0' }}>No entries yet</div>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Resources page ───────────────────────────────────────────────────────────
+
+const RES_CATS = ['Clinical', 'Academic', 'Learning', 'Tools', 'Other']
+
+function ResourcesPage() {
+  const [items, setItems] = useState<Resource[]>([])
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const [category, setCategory] = useState('Clinical')
+  const [note, setNote] = useState('')
+  const [filter, setFilter] = useState('All')
+  const load = useCallback(async () => { const r = await fetch('/api/resources'); const d = await r.json(); setItems(Array.isArray(d) ? d : []) }, [])
+  useEffect(() => { load() }, [load])
+  const add = async () => {
+    if (!title.trim()) return
+    await fetch('/api/resources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), url: url.trim(), category, note: note.trim() }) })
+    setTitle(''); setUrl(''); setNote(''); load()
+  }
+  const del = async (id: number) => { await fetch('/api/resources', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); load() }
+  const filtered = items.filter(i => filter === 'All' || i.category === filter)
+  return (
+    <div>
+      <h1 style={{ margin: '0 0 26px', ...T.h1, color: C.text }}>Personal Resources</h1>
+      <Glass style={{ padding: 26, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 0.9fr', gap: 10, marginBottom: 10 }}>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" style={gIn}/>
+          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="URL (optional)" style={gIn}/>
+          <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...gIn, background: 'rgba(12,14,34,1)' }}>{RES_CATS.map(c => <option key={c}>{c}</option>)}</select>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" style={{ ...gIn, flex: 1 }} onKeyDown={e => e.key === 'Enter' && add()}/>
+          <button onClick={add} style={{ background: 'rgba(255,216,160,0.14)', border: '1px solid rgba(255,216,160,0.28)', borderRadius: 12, color: C.gold, ...T.body, fontWeight: 550, padding: '0 26px', cursor: 'pointer' }}>Add</button>
+        </div>
+      </Glass>
+      <div style={{ display: 'flex', gap: 7, marginBottom: 18 }}>
+        {['All', ...RES_CATS].map(c => (
+          <button key={c} onClick={() => setFilter(c)} style={{ padding: '6px 18px', borderRadius: 20, border: 'none', cursor: 'pointer', ...T.sm, fontWeight: 600, background: filter === c ? 'rgba(170,185,255,0.16)' : 'rgba(12,14,34,0.55)', color: filter === c ? C.text : C.textMuted, backdropFilter: 'blur(20px)' }}>{c}</button>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+        {filtered.map(r => (
+          <Glass key={r.id} style={{ padding: '18px 20px', position: 'relative' }}>
+            <div style={{ ...T.label, fontSize: 8.5, color: C.gold, marginBottom: 8 }}>{r.category}</div>
+            <div style={{ ...T.h3, color: C.text, marginBottom: 6 }}>{r.title}</div>
+            {r.note && <div style={{ ...T.sm, color: C.textSub, marginBottom: 8 }}>{r.note}</div>}
+            {r.url && (
+              <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ ...T.sm, color: C.aurora, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Link2 size={11}/>Open link
+              </a>
+            )}
+            <button onClick={() => del(r.id)} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex' }}><X size={12}/></button>
+          </Glass>
+        ))}
+        {filtered.length === 0 && <div style={{ ...T.body, color: C.textMuted, gridColumn: '1/-1', textAlign: 'center', padding: '32px 0' }}>No resources yet — add links, papers, tools and references above</div>}
       </div>
     </div>
   )
@@ -1143,39 +1114,30 @@ function FriendsPage() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function CommandCentre() {
-  const [page, setPage]         = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>('dashboard')
   const [familySub, setFamilySub] = useState('kids')
-  const [projects, setProjects]   = useState<Project[]>([])
-  const [tod]                     = useState<TimeOfDay>(getTOD)
-  const [focusTask, setFocusTask] = useState<Task|null>(null)
-  const [landscape, setLandscape] = useState<Landscape>(() => {
-    if (typeof window !== 'undefined') return (localStorage.getItem('landscape') as Landscape) || 'sunset'
-    return 'sunset'
-  })
+  const [projects, setProjects] = useState<Project[]>([])
+  const [focusTask, setFocusTask] = useState<Task | null>(null)
 
-  const loadProjects = useCallback(async () => { const r=await fetch('/api/projects'); setProjects(await r.json()) }, [])
+  const loadProjects = useCallback(async () => { const r = await fetch('/api/projects'); setProjects(await r.json()) }, [])
   useEffect(() => { loadProjects() }, [loadProjects])
 
-  const changeLandscape = (l: Landscape) => { setLandscape(l); localStorage.setItem('landscape', l) }
-  const handleSetPage = (p: Page) => { if(p==='family') setFamilySub('kids'); setPage(p) }
+  const handleSetPage = (p: Page) => { if (p === 'family') setFamilySub('kids'); setPage(p) }
 
   return (
     <>
       <style>{KEYFRAMES}</style>
-      <AmbientBg landscape={landscape} tod={tod}/>
+      <SpaceBg/>
       {focusTask && <FocusMode task={focusTask} onExit={() => setFocusTask(null)}/>}
-      <div style={{ position:'relative', zIndex:1, display:'flex', minHeight:'100vh' }}>
-        <Sidebar page={page} setPage={handleSetPage} familySub={familySub} setFamilySub={setFamilySub} tod={tod} onFocus={setFocusTask}/>
-        <main style={{ flex:1, padding:30, overflowY:'auto', minWidth:0 }}>
-          {/* Top bar */}
-          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:24 }}>
-            <LandscapeSelector value={landscape} onChange={changeLandscape}/>
-          </div>
-          {page==='dashboard' && <Dashboard projects={projects} setPage={handleSetPage}/>}
-          {page==='projects'  && <ProjectsPage projects={projects} reload={loadProjects}/>}
-          {page==='health'    && <HealthPage/>}
-          {page==='family'    && <FamilyPage sub={familySub} setSub={setFamilySub}/>}
-          {page==='friends'   && <FriendsPage/>}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', minHeight: '100vh' }}>
+        <Sidebar page={page} setPage={handleSetPage} familySub={familySub} setFamilySub={setFamilySub} onFocus={setFocusTask}/>
+        <main style={{ flex: 1, padding: '34px 34px 50px', overflowY: 'auto', minWidth: 0 }}>
+          {page === 'dashboard' && <Dashboard projects={projects} setPage={handleSetPage}/>}
+          {page === 'projects'  && <ProjectsPage projects={projects} reload={loadProjects}/>}
+          {page === 'health'    && <HealthPage/>}
+          {page === 'family'    && <FamilyPage sub={familySub} setSub={setFamilySub}/>}
+          {page === 'friends'   && <FriendsPage/>}
+          {page === 'resources' && <ResourcesPage/>}
         </main>
       </div>
     </>

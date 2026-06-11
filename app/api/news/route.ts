@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+const FEEDS: Record<string, string> = {
+  research: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+  politics: 'https://feeds.bbci.co.uk/news/politics/rss.xml',
+  finance:  'https://feeds.bbci.co.uk/news/business/rss.xml',
+}
+
+async function fetchFeed(url: string) {
   try {
-    const res = await fetch('https://feeds.bbci.co.uk/news/rss.xml', {
-      next: { revalidate: 300 },
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    })
+    const res = await fetch(url, { next: { revalidate: 300 }, headers: { 'User-Agent': 'Mozilla/5.0' } })
     const xml = await res.text()
     const items: { title: string; link: string; pubDate: string; description: string }[] = []
     const itemRegex = /<item>([\s\S]*?)<\/item>/g
@@ -20,12 +23,21 @@ export async function GET() {
         title: get('title'),
         link: get('link') || block.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim() || '',
         pubDate: get('pubDate'),
-        description: get('description').replace(/<[^>]+>/g, '').slice(0, 160),
+        description: get('description').replace(/<[^>]+>/g, '').slice(0, 140),
       })
-      if (items.length >= 9) break
+      if (items.length >= 4) break
     }
-    return NextResponse.json(items)
+    return items
   } catch {
-    return NextResponse.json([])
+    return []
   }
+}
+
+export async function GET() {
+  const [research, politics, finance] = await Promise.all([
+    fetchFeed(FEEDS.research),
+    fetchFeed(FEEDS.politics),
+    fetchFeed(FEEDS.finance),
+  ])
+  return NextResponse.json({ research, politics, finance })
 }
