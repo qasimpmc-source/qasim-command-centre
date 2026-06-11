@@ -291,9 +291,9 @@ const gIn: React.CSSProperties = {
 
 function WLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-      <span style={{ color: C.gold, opacity: 0.85, display: 'flex' }}>{icon}</span>
-      <span style={{ ...T.label, color: C.textMuted }}>{children}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 18 }}>
+      <span style={{ color: C.gold, display: 'flex' }}>{icon}</span>
+      <span style={{ ...T.label, fontSize: 12.5, fontWeight: 650, letterSpacing: '0.14em', color: 'rgba(255,232,200,0.92)', textShadow: '0 1px 8px rgba(0,0,10,0.6)' }}>{children}</span>
     </div>
   )
 }
@@ -335,19 +335,20 @@ function MiniCalendar() {
   const td = now.getDate(), isCur = yr === now.getFullYear() && mo === now.getMonth()
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <button onClick={() => mo === 0 ? (setMo(11), setYr(y => y - 1)) : setMo(m => m - 1)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex', padding: 2 }}><ChevronLeft size={12}/></button>
-        <span style={{ ...T.label, fontSize: 9.5, color: C.textSub }}>{MONTHS[mo].slice(0, 3)} {yr}</span>
-        <button onClick={() => mo === 11 ? (setMo(0), setYr(y => y + 1)) : setMo(m => m + 1)} style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', display: 'flex', padding: 2 }}><ChevronRight size={12}/></button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <button onClick={() => mo === 0 ? (setMo(11), setYr(y => y - 1)) : setMo(m => m - 1)} style={{ background: 'none', border: 'none', color: C.textSub, cursor: 'pointer', display: 'flex', padding: 3 }}><ChevronLeft size={15}/></button>
+        <span style={{ ...T.label, fontSize: 12, fontWeight: 650, color: C.text }}>{MONTHS[mo]} {yr}</span>
+        <button onClick={() => mo === 11 ? (setMo(0), setYr(y => y + 1)) : setMo(m => m + 1)} style={{ background: 'none', border: 'none', color: C.textSub, cursor: 'pointer', display: 'flex', padding: 3 }}><ChevronRight size={15}/></button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 0 }}>
-        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ ...T.label, fontSize: 7.5, textAlign: 'center', color: C.textMuted, padding: '1px 0' }}>{d}</div>)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ ...T.label, fontSize: 9.5, textAlign: 'center', color: C.textSub, padding: '2px 0' }}>{d}</div>)}
         {cells.map((d, i) => (
           <div key={i} style={{
-            textAlign: 'center', fontSize: 10, padding: '3px 1px', borderRadius: 6, ...T.num,
-            background: d && isCur && d === td ? 'rgba(255,216,160,0.20)' : 'transparent',
-            color: d ? (isCur && d === td ? C.gold : C.textMuted) : 'transparent',
+            textAlign: 'center', fontSize: 12.5, padding: '6px 1px', borderRadius: 8, ...T.num,
+            background: d && isCur && d === td ? 'rgba(255,216,160,0.22)' : 'transparent',
+            color: d ? (isCur && d === td ? C.gold : 'rgba(220,224,245,0.72)') : 'transparent',
             fontWeight: d && isCur && d === td ? 700 : 400,
+            border: d && isCur && d === td ? '1px solid rgba(255,216,160,0.35)' : '1px solid transparent',
           }}>{d ?? ''}</div>
         ))}
       </div>
@@ -420,7 +421,7 @@ function Sidebar({ page, setPage, familySub, setFamilySub, onFocus }: {
   const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Good night'
   return (
     <div style={{
-      width: 256, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column',
+      width: 288, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column',
       background: 'rgba(6,8,22,0.62)', backdropFilter: 'blur(44px) saturate(140%)', WebkitBackdropFilter: 'blur(44px) saturate(140%)',
       borderRight: '1px solid rgba(160,175,255,0.08)',
     }}>
@@ -489,7 +490,7 @@ function WeatherWidget() {
   }, [])
   return (
     <Glass glow="rgba(90,140,220,0.10)" style={{ padding: 24 }}>
-      <WLabel icon={<Cloud size={13} strokeWidth={1.5}/>}>Weather</WLabel>
+      <WLabel icon={<Cloud size={16} strokeWidth={1.7}/>}>Weather</WLabel>
       {wx ? (
         <>
           <div style={{ marginBottom: 10, animation: 'float 11s ease-in-out infinite' }}><WxIcon code={wx.code} size={40}/></div>
@@ -518,26 +519,40 @@ function AnalogClock({ tz, city, now }: { tz: string; city: string; now: Date })
   const get = (t: string) => Number(parts.find(p => p.type === t)?.value ?? 0)
   const hh = get('hour') % 12, mm = get('minute'), ss = get('second')
   const ha = (hh + mm / 60) * 30, ma = (mm + ss / 60) * 6, sa = ss * 6
-  const R = 34
+  const R = 54
+  const hand = (angle: number, len: number, tail: number) => {
+    const a = angle * Math.PI / 180
+    return { x1: R - Math.sin(a) * tail, y1: R + Math.cos(a) * tail, x2: R + Math.sin(a) * len, y2: R - Math.cos(a) * len }
+  }
+  const hH = hand(ha, R * 0.46, 6), mH = hand(ma, R * 0.70, 6), sH = hand(sa, R * 0.80, R * 0.18)
   return (
     <div style={{ textAlign: 'center' }}>
       <svg width={R * 2} height={R * 2} viewBox={`0 0 ${R * 2} ${R * 2}`}>
-        <circle cx={R} cy={R} r={R - 1.5} fill="rgba(170,185,255,0.05)" stroke="rgba(170,185,255,0.20)" strokeWidth="1"/>
-        {Array.from({ length: 12 }).map((_, i) => {
-          const a = i * 30 * Math.PI / 180
-          const big = i % 3 === 0
+        <defs>
+          <radialGradient id={`face-${city}`} cx="50%" cy="42%" r="65%">
+            <stop offset="0%" stopColor="rgba(28,32,58,0.95)"/>
+            <stop offset="100%" stopColor="rgba(10,12,26,0.98)"/>
+          </radialGradient>
+        </defs>
+        <circle cx={R} cy={R} r={R - 1} fill={`url(#face-${city})`} stroke="rgba(190,200,255,0.22)" strokeWidth="1.5"/>
+        {Array.from({ length: 60 }).map((_, i) => {
+          const a = i * 6 * Math.PI / 180
+          const big = i % 5 === 0
+          if (!big && i % 1 !== 0) return null
           return <line key={i}
-            x1={R + Math.sin(a) * (R - (big ? 8 : 5.5))} y1={R - Math.cos(a) * (R - (big ? 8 : 5.5))}
-            x2={R + Math.sin(a) * (R - 3.5)} y2={R - Math.cos(a) * (R - 3.5)}
-            stroke={big ? 'rgba(255,216,160,0.65)' : 'rgba(220,224,245,0.30)'} strokeWidth={big ? 1.6 : 1}/>
+            x1={R + Math.sin(a) * (R - (big ? 11 : 6.5))} y1={R - Math.cos(a) * (R - (big ? 11 : 6.5))}
+            x2={R + Math.sin(a) * (R - 4)} y2={R - Math.cos(a) * (R - 4)}
+            stroke={big ? 'rgba(245,246,255,0.92)' : 'rgba(220,224,245,0.22)'} strokeWidth={big ? 2.4 : 1}
+            strokeLinecap="round"/>
         })}
-        <line x1={R} y1={R} x2={R + Math.sin(ha * Math.PI / 180) * (R * 0.45)} y2={R - Math.cos(ha * Math.PI / 180) * (R * 0.45)} stroke="rgba(245,246,255,0.92)" strokeWidth="2.4" strokeLinecap="round"/>
-        <line x1={R} y1={R} x2={R + Math.sin(ma * Math.PI / 180) * (R * 0.68)} y2={R - Math.cos(ma * Math.PI / 180) * (R * 0.68)} stroke="rgba(245,246,255,0.70)" strokeWidth="1.6" strokeLinecap="round"/>
-        <line x1={R} y1={R + 6} x2={R + Math.sin(sa * Math.PI / 180) * (R * 0.78)} y2={R - Math.cos(sa * Math.PI / 180) * (R * 0.78)} stroke={C.gold} strokeWidth="1" strokeLinecap="round" style={{ transformOrigin: `${R}px ${R}px` }}/>
-        <circle cx={R} cy={R} r="2" fill={C.gold}/>
+        <line {...hH} stroke="rgba(245,246,255,0.95)" strokeWidth="4.5" strokeLinecap="round"/>
+        <line {...mH} stroke="rgba(245,246,255,0.95)" strokeWidth="3" strokeLinecap="round"/>
+        <line {...sH} stroke="#ff9f0a" strokeWidth="1.6" strokeLinecap="round"/>
+        <circle cx={R} cy={R} r="3.6" fill="#ff9f0a"/>
+        <circle cx={R} cy={R} r="1.6" fill="rgba(10,12,26,1)"/>
       </svg>
-      <div style={{ ...T.label, fontSize: 8.5, color: C.textSub, marginTop: 6 }}>{city}</div>
-      <div style={{ ...T.num, fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+      <div style={{ ...T.label, fontSize: 11, fontWeight: 650, color: C.text, marginTop: 8 }}>{city}</div>
+      <div style={{ ...T.num, fontSize: 13.5, color: C.textSub, marginTop: 3 }}>
         {new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(now)}
       </div>
     </div>
@@ -549,8 +564,8 @@ function ClockWidget() {
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(id) }, [])
   return (
     <Glass glow="rgba(150,140,255,0.10)" style={{ padding: 24 }}>
-      <WLabel icon={<Clock size={13} strokeWidth={1.5}/>}>World Clock</WLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, justifyItems: 'center' }}>
+      <WLabel icon={<Clock size={16} strokeWidth={1.7}/>}>World Clock</WLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, justifyItems: 'center' }}>
         {CLOCKS.map(c => <AnalogClock key={c.city} tz={c.tz} city={c.city} now={now}/>)}
       </div>
     </Glass>
@@ -568,7 +583,7 @@ function ReflectionsWidget() {
   const del = async (id: number) => { await fetch('/api/reflections', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); load() }
   return (
     <Glass glow="rgba(255,200,120,0.08)" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <WLabel icon={<Feather size={13} strokeWidth={1.5}/>}>Stray Reflections</WLabel>
+      <WLabel icon={<Feather size={16} strokeWidth={1.7}/>}>Stray Reflections</WLabel>
       <div style={{ display: 'flex', gap: 8 }}>
         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="A thought, observation, or idea..." rows={2}
           style={{ ...gIn, resize: 'none', flex: 1 }}
@@ -625,7 +640,7 @@ function ProjectsWidget({ projects, onOpen }: { projects: Project[]; onOpen: () 
   return (
     <Glass glow="rgba(90,225,165,0.08)" style={{ padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <WLabel icon={<Layers size={13} strokeWidth={1.5}/>}>Projects</WLabel>
+        <WLabel icon={<Layers size={16} strokeWidth={1.7}/>}>Projects</WLabel>
         <button onClick={onOpen} style={{ background: 'rgba(170,185,255,0.08)', border: `1px solid ${C.border}`, borderRadius: 10, color: C.textSub, padding: '6px 16px', cursor: 'pointer', ...T.sm, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>All <ArrowUpRight size={11}/></button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
@@ -671,7 +686,7 @@ function HealthWidget() {
   ]
   return (
     <Glass glow="rgba(255,120,140,0.07)" style={{ padding: 24 }}>
-      <WLabel icon={<Heart size={13} strokeWidth={1.5}/>}>Health</WLabel>
+      <WLabel icon={<Heart size={16} strokeWidth={1.7}/>}>Health</WLabel>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {metrics.map(m => (
           <div key={m.label} style={{ background: 'rgba(170,185,255,0.05)', borderRadius: 13, padding: '13px 10px', textAlign: 'center' }}>
@@ -698,22 +713,23 @@ function NewsWidget() {
   useEffect(() => { fetch('/api/news').then(r => r.json()).then(setNews) }, [])
   return (
     <Glass glow="rgba(255,165,90,0.06)" style={{ padding: 24 }}>
-      <WLabel icon={<Newspaper size={13} strokeWidth={1.5}/>}>News · BBC</WLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+      <WLabel icon={<Newspaper size={16} strokeWidth={1.7}/>}>News · BBC</WLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
         {NEWS_TABS.map(tab => (
           <div key={tab.key}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
               <span style={{ color: tab.c, display: 'flex' }}>{tab.icon}</span>
-              <span style={{ ...T.label, fontSize: 9.5, color: tab.c }}>{tab.label}</span>
+              <span style={{ ...T.label, fontSize: 12, fontWeight: 650, color: tab.c }}>{tab.label}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {(news?.[tab.key] ?? []).map((n, i) => (
                 <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
-                  style={{ textDecoration: 'none', display: 'block', background: 'rgba(170,185,255,0.04)', borderRadius: 12, padding: '12px 14px', transition: 'all 0.22s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.09)'; e.currentTarget.style.transform = 'translateX(3px)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.04)'; e.currentTarget.style.transform = 'translateX(0)' }}>
-                  <div style={{ ...T.sm, fontWeight: 550, color: C.text, lineHeight: 1.45 }}>{n.title}</div>
-                  {n.pubDate && <div style={{ ...T.label, fontSize: 8, color: C.textMuted, marginTop: 6 }}>{new Date(n.pubDate).toLocaleDateString('en-GB')}</div>}
+                  style={{ textDecoration: 'none', display: 'block', background: 'rgba(170,185,255,0.05)', borderRadius: 14, padding: '16px 18px', transition: 'all 0.22s', borderLeft: `2px solid ${tab.c.replace('0.9','0.35')}` }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.10)'; e.currentTarget.style.transform = 'translateX(3px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(170,185,255,0.05)'; e.currentTarget.style.transform = 'translateX(0)' }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 550, letterSpacing: '-0.005em', color: C.text, lineHeight: 1.5 }}>{n.title}</div>
+                  {n.description && <div style={{ fontSize: 12.5, color: C.textSub, lineHeight: 1.6, marginTop: 7 }}>{n.description}</div>}
+                  {n.pubDate && <div style={{ ...T.label, fontSize: 9, color: C.textMuted, marginTop: 9 }}>{new Date(n.pubDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>}
                 </a>
               ))}
               {!news && <div style={{ ...T.sm, color: C.textMuted }}>Loading...</div>}
@@ -734,7 +750,7 @@ function Dashboard({ projects, setPage }: { projects: Project[]; setPage: (p: Pa
         <h1 style={{ margin: 0, ...T.display, fontSize: 44, color: C.text }}>Command Centre</h1>
         <div style={{ ...T.body, color: C.textMuted, marginTop: 6 }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.8fr', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr 1.75fr', gap: 18 }}>
         <WeatherWidget/>
         <ClockWidget/>
         <ReflectionsWidget/>
